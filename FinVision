@@ -1,6 +1,6 @@
 #Import .csv File containing Financial Data
 import csv
-with open('C:/Users/91891/OneDrive/Desktop/FINDAT 16-24 - FINAL DATASET.csv', newline='') as f:
+with open(file_path) as f:
     reader = csv.reader(f)
     for row in reader:
         print(row)
@@ -10,13 +10,13 @@ import csv
 import pandas as pd
 
 #Import.csv File containing Financial Data
-data = pd.read_csv('C:\\Users\\91891\\OneDrive\\Desktop\\codin\\cleaned_data.csv')
+data = pd.read_csv(file_path)
 import csv
 
 import pandas as pd
 
 # Load the dataset
-data = pd.read_csv('C:/Users/91891/OneDrive/Desktop/FINDAT 16-24 - FINAL DATASET.csv')
+data = pd.read_csv(file_path)
 
 # Slice the DataFrame from row 2 to the end
 data = data.iloc[1:, :]
