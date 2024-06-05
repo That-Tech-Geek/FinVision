@@ -1,4 +1,3 @@
-# List of all NSE-Registered Companies
 nse_companies = {
     "INFY": "Infosys",
     "TCS": "Tata Consultancy Services",
