@@ -26,7 +26,7 @@ This section will guide you on setting up FinVision and running it locally.
 
 ### Clone the repository:
 
-  git clone https://github.com/<your-username>/FinVision.git
+  git clone https://github.com/That-Tech-Geek/FinVision.git
 
 -Use code with caution.
 
