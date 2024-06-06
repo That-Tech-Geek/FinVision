@@ -1,6 +1,6 @@
-# FiVision: AI-powered Market Trend Analysis
+# FinVision: AI-powered Market Trend Analysis
 
-FiVision is an AI-powered model designed to analyze market trends and provide insights for informed investment decisions.
+FinVision is an AI-powered model designed to analyze market trends and provide insights for informed investment decisions.
 
 ## Features
 
@@ -14,7 +14,7 @@ FiVision is an AI-powered model designed to analyze market trends and provide in
 
 ## Getting Started
 
-This section will guide you on setting up FiVision and running it locally.
+This section will guide you on setting up FinVision and running it locally.
 
 ### Prerequisites:
 
@@ -26,7 +26,7 @@ This section will guide you on setting up FiVision and running it locally.
 
 ### Clone the repository:
 
-  git clone https://github.com/<your-username>/FiVision.git
+  git clone https://github.com/<your-username>/FinVision.git
 
 -Use code with caution.
 
@@ -42,7 +42,7 @@ This section will guide you on setting up FiVision and running it locally.
 
 ### Contributing
 
-We welcome contributions to FiVision! If you'd like to contribute, please:
+We welcome contributions to FinVision! If you'd like to contribute, please:
 
 -Fork the repository.
 
@@ -54,4 +54,4 @@ We welcome contributions to FiVision! If you'd like to contribute, please:
 
 ## Disclaimer
 
-FiVision is provided for educaional purposes only and should not be considered financial advice. Please consult with a financial advisor before making any investment decisions.
+FinVision is provided for educaional purposes only and should not be considered financial advice. Please consult with a financial advisor before making any investment decisions.
