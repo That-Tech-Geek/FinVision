@@ -3584,6 +3584,103 @@ class PostAalysis:
         accuracy = total_correct / len(dataset)
         print(f'Test Accuracy: {accuracy:.4f}')
 
+class StockDataset:
+    def __init__(self, data, tokenizer, max_len):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_len = max_len
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        text = self.data.iloc[idx, 0]
+        label = self.data.iloc[idx, 1]
+
+        encoding = self.tokenizer.encode_plus(
+            text,
+            add_special_tokens=True,
+            max_length=self.max_len,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            return_tensors='pt'
+        )
+
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'label': torch.tensor(label, dtype=torch.long)
+        }
+
+class MultiTaskModel:
+    def __init__(self, lstm_model, bert_model):
+        super(MultiTaskModel, self).__init__()
+        self.lstm_model = lstm_model
+        self.bert_model = bert_model
+        self.fc1 = torch.nn.Linear(128, 64)
+        self.fc2 = torch.nn.Linear(768, 64)
+        self.fc3 = torch.nn.Linear(128, 1)
+
+    def forward(self, lstm_input, bert_input):
+        lstm_output = self.lstm_model(lstm_input)
+        lstm_output = F.relu(self.fc1(lstm_output))
+        bert_output = self.bert_model(bert_input['input_ids'], attention_mask=bert_input['attention_mask'])
+        bert_output = F.relu(self.fc2(bert_output.pooler_output))
+        output = torch.cat((lstm_output, bert_output), dim=1)
+        output = self.fc3(output)
+        return output
+
+    data = pd.read_csv('stock_prices.csv', index_col='Date', parse_dates=['Date'])
+    scaler = MinMaxScaler()
+    data['Close'] = scaler.fit_transform(data[['Close']])
+
+    lstm_data = data.dropna().reset_index(drop=True)
+    lstm_data['Date'] = pd.to_datetime(lstm_data['Date'])
+    lstm_data.set_index('Date', inplace=True)
+
+    bert_data = pd.read_csv('news_articles.csv')
+    bert_data['text'] = bert_data['text'].apply(lambda x: x.lower())
+    bert_data['label'] = bert_data['label'].apply(lambda x: 1 if x > 0 else 0)
+
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    bert_dataset = StockDataset(bert_data, tokenizer, max_len=512)
+
+    lstm_loader = DataLoader(lstm_data, batch_size=32, shuffle=True)
+    bert_loader = DataLoader(bert_dataset, batch_size=32, shuffle=True)
+
+    lstm_model = Sequential()
+    lstm_model.add(LSTM(50, return_sequences=True, input_shape=(lstm_data.shape[1], 1)))
+    lstm_model.add(LSTM(50, return_sequences=False))
+    lstm_model.add(Dense(25))
+    lstm_model.add(Dense(1))
+
+    bert_model = BertModel.from_pretrained('bert-base-uncased')
+
+    model = MultiTaskModel(lstm_model, bert_model)
+
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    for epoch in range(10):
+        for lstm_batch, bert_batch in zip(lstm_loader, bert_loader):
+            lstm_input = lstm_batch['Close'].unsqueeze(2)
+            bert_input = {
+                'input_ids': bert_batch['input_ids'].to(device),
+                'attention_mask': bert_batch['attention_mask'].to(device)
+            }
+            label = bert_batch['label'].to(device)
+
+            optimizer.zero_grad()
+
+            output = model(lstm_input, bert_input)
+            loss = criterion(output, label)
+
+            loss.backward()
+            optimizer.step()
+
+        print(f'Epoch {epoch+1}, Loss: {loss.item()}')
+
 class SWOTanalysis:
     # Create a DataFrame from the SWOT data
     swot_df = pd.DataFrame(swot_data)
@@ -3766,7 +3863,6 @@ class ARIMAtrain:
 class to_do:
     #develop as backend
     #develop a frontend
-    #develop more sohisticated market analysis modelling
     #develop competitive pricing model for this
     #Research into Financial markets to understand risk management
     #develop stock insurance policy
