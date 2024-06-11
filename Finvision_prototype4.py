@@ -3484,105 +3484,111 @@ class NewsAnalysis2:
         accuracy = total_correct / len(data_loader.dataset)
         print(f'Epoch {epoch+1}, Accuracy: {accuracy:.4f}')
 
-class PostAalysis:
-    # Preprocess the text data
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    data['input_ids'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True))
-    data['attention_mask'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True, max_length=512, padding='max_length', truncation=True))
+class SentimentDataset:
+    def __init__(self, text, labels, tokenizer, max_len):
+        self.text = text
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.max_len = max_len
 
-    # Create a custom dataset class for our data
-    class SentimentDataset(torch.utils.data.Dataset):
-        def __init__(self, data, tokenizer):
-            self.data = data
-            self.tokenizer = tokenizer
+    def __len__(self):
+        return len(self.text)
 
-        def __len__(self):
-            return len(self.data)
+    def __getitem__(self, idx):
+        text = self.text[idx]
+        label = self.labels[idx]
 
-        def __getitem__(self, idx):
-            text = self.data.iloc[idx, 0]
-            label = self.data.iloc[idx, 1]
+        encoding = self.tokenizer.encode_plus(
+            text,
+            add_special_tokens=True,
+            max_length=self.max_len,
+            padding='max_length',
+            truncation=True,
+            return_attention_mask=True,
+            return_tensors='pt'
+        )
 
-            encoding = self.tokenizer.encode_plus(
-                text,
-                add_special_tokens=True,
-                max_length=512,
-                padding='max_length',
-                truncation=True,
-                return_attention_mask=True,
-                return_tensors='pt'
-            )
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'label': torch.tensor(label, dtype=torch.long)
+        }
 
-            return {
-                'input_ids': encoding['input_ids'].flatten(),
-                'attention_mask': encoding['attention_mask'].flatten(),
-                'label': torch.tensor(label, dtype=torch.long)
-            }
+    df = pd.read_csv('/content/data.csv')
+    train_text, val_text, train_labels, val_labels = train_test_split(df['sentence'], df['label'], random_state=2021, test_size=0.3, stratify=df['label'])
 
-        # Create a data loader for our dataset
-        dataset = SentimentDataset(data, tokenizer)
-        data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+    bert = AutoModel.from_pretrained('bert-base-uncased')
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-uncased')
 
-        # Define a custom model that combines BERT with a sentiment analysis head
-        class SentimentAnalysisModel(nn.Module):
-            def __init__(self, bert_model):
-                super(SentimentAnalysisModel, self).__init__()
-                self.bert_model = bert_model
-                self.dropout = nn.Dropout(0.1)
-                self.classifier = nn.Linear(self.bert_model.config.hidden_size, 2)
+    train_dataset = SentimentDataset(train_text, train_labels, tokenizer, max_len=512)
+    val_dataset = SentimentDataset(val_text, val_labels, tokenizer, max_len=512)
 
-            def forward(self, input_ids, attention_mask):
-                outputs = self.bert_model(input_ids, attention_mask=attention_mask)
-                pooled_output = outputs.pooler_output
-                pooled_output = self.dropout(pooled_output)
-                outputs = self.classifier(pooled_output)
-                return outputs
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-        # Load a pre-trained BERT model and fine-tune it for sentiment analysis
-        bert_model = BertModel.from_pretrained('bert-base-uncased')
-        model = SentimentAnalysisModel(bert_model)
+class SentimentAnalysisModel:
+    def __init__(self, bert_model):
+        super(SentimentAnalysisModel, self).__init__()
+        self.bert_model = bert_model
+        self.dropout = nn.Dropout(0.1)
+        self.fc = nn.Linear(self.bert_model.config.hidden_size, 2)
 
-        # Train the model
-        criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert_model(input_ids, attention_mask=attention_mask)
+        pooled_output = outputs.pooler_output
+        pooled_output = self.dropout(pooled_output)
+        outputs = self.fc(pooled_output)
+        return outputs
 
-        for epoch in range(5):
-            model.train()
-            total_loss = 0
-            for batch in data_loader:
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                labels = batch['label'].to(device)
+    model = SentimentAnalysisModel(bert)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
 
-                optimizer.zero_grad()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
 
-                outputs = model(input_ids, attention_mask)
-                loss = criterion(outputs, labels)
+    for epoch in range(5):
+        model.train()
+        total_loss = 0
+        for batch in train_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
 
-                loss.backward()
-                optimizer.step()
+            optimizer.zero_grad()
 
-                total_loss += loss.item()
+            outputs = model(input_ids, attention_mask)
+            loss = criterion(outputs, labels)
 
-            print(f'Epoch {epoch+1}, Loss: {total_loss / len(data_loader)}')
+            loss.backward()
+            optimizer.step()
 
-        model.eval()
+            total_loss += loss.item()
 
-        # Evaluate the model
-        test_data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
-        total_correct = 0
-        with torch.no_grad():
-            for batch in test_data_loader:
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                labels = batch['label'].to(device)
+        print(f'Epoch {epoch+1}, Loss: {total_loss / len(train_loader)}')
 
-                outputs = model(input_ids, attention_mask)
-                _, predicted = torch.max(outputs, 1)
-                total_correct += (predicted == labels).sum().item()
+    model.eval()
+    total_correct = 0
+    y_pred = []
+    with torch.no_grad():
+        for batch in val_loader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
 
-        accuracy = total_correct / len(dataset)
-        print(f'Test Accuracy: {accuracy:.4f}')
+            outputs = model(input_ids, attention_mask)
+            _, predicted = torch.max(outputs, 1)
+            total_correct += (predicted == labels).sum().item()
+            y_pred.extend(predicted.cpu().numpy())
+
+    accuracy = total_correct / len(val_dataset)
+    print(f'Val Accuracy: {accuracy:.4f}')
+
+    y_true = val_labels.tolist()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    print(f'Val F1 Score: {f1:.4f}')
+    print(f'Val Classification Report:\n{classification_report(y_true, y_pred)}')
+    print(f'Val Confusion Matrix:\n{confusion_matrix(y_true, y_pred)}')
 
 class StockDataset:
     def __init__(self, data, tokenizer, max_len):
