@@ -13,6 +13,35 @@ class Imports:
     import yfinance as yf
     import requests
     import matplotlib.pyplot as plt
+    from sklearn.preprocessing import MinMaxScaler
+    from keras.models import Model
+    from keras.layers import LSTM, Dense, Dropout, Input, Bidirectional, Attention, Reshape, concatenate, Conv1D, MaxPooling1D
+    from keras.layers.normalization import LayerNormalization
+    from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+    from keras.utils import to_categorical
+    from sklearn.gaussian_process import GaussianProcessRegressor
+    from skopt import gp_minimize
+    from skopt.space import Real, Integer
+    from skopt.plots import plot_convergence
+    from tensorflow.keras.layers import MultiHeadAttention, TransformerEncoder
+    from tensorflow.keras.layers import Embedding, Flatten
+    from shap import KernelExplainer, TreeExplainer
+    from genetic_algorithm import GeneticAlgorithm
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    from nltk.stem import WordNetLemmatizer
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.model_selection import train_test_split
+    from sklearn.naive_bayes import MultinomialNB
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from transformers import BertTokenizer, BertModel
+    from torch_geometric.nn import GCNConv, global_mean_pool
+    from torch_geometric.data import Data
+    from sklearn.preprocessing import LabelEncoder
 
 class NSEcorp:
     nse_companies = {
@@ -2418,9 +2447,10 @@ class AIsearch:
             return company_name
         else:
             return company_name, retrieve_financial_data(company_name), retrieve_news_articles(company_name)
+
     def retrieve_financial_data(company_name: str) -> list:
         Company_name = company_name.replace(" ", "+")
-        Company_Name = Company_name.replace(" & ", "+%26+")
+        Company_Name = Company_name.replace("&", "+%26+")
         url = f"https://www.google.com/search?q={Company_Name}+financials"
         response = requests.get(url)
         response.raise_for_status()  # Raise an exception for bad status codes
@@ -2454,26 +2484,47 @@ class AIsearch:
         data['low'] = soup.find('span', id='low').text.strip()
         return data
 
+    def get_moneycontrol_data(company_name):
+        url = f"https://www.moneycontrol.com/india/stockpricequote/{company_name}"
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        data = {}
+        data['company_name'] = company_name
+        data['current_price'] = soup.find('span', class_='span_price_wrap').text.strip()
+        data['open'] = soup.find('span', class_='open').text.strip()
+        data['high'] = soup.find('span', class_='high').text.strip()
+        data['low'] = soup.find('span', class_='low').text.strip()
+        return data
+
     def search_financials(company):
         et_money_data = get_et_money_data(company)
         nse_data = get_nse_data(company)
-        return et_money_data, nse_data
-        return financial_data
+        moneycontrol_data = get_moneycontrol_data(company)
+        return et_money_data, nse_data, moneycontrol_data
 
     def retrieve_news_articles(company_name):
-        url = f"https://www.google.com/search?q={company_name}+news"
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
         news_articles = []
-        for result in soup.find_all('div', class_='rc'):
-            title = result.find('h3').text
-            link = result.find('a')['href']
-            article = Article(link)
-            article.download()
-            article.parse()
-            news_articles.append((title, link, article.text))
+        urls = [
+            f"https://www.google.com/search?q={company_name}+news",
+            f"https://www.news18.com/search/?q={company_name}",
+            f"https://www.ndtv.com/search?q={company_name}",
+            f"https://www.republicworld.com/search?q={company_name}",
+            f"https://www.indiatimes.com/search?q={company_name}",
+            f"https://www.hindustantimes.com/search?q={company_name}",
+            f"https://www.livemint.com/search?q={company_name}",
+            f"https://www.businesstoday.in/search?q={company_name}",
+        ]
+        for url in urls:
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            for result in soup.find_all('div', class_='rc'):
+                title = result.find('h3').text
+                link = result.find('a')['href']
+                article = Article(link)
+                article.download()
+                article.parse()
+                news_articles.append((title, link, article.text))
         return news_articles
-
     def search_internet(company):
         # implementation of searching financials on the internet
         # you need to implement this function to retrieve the financial data
@@ -3255,6 +3306,284 @@ class StockAnalysis:
         print(f"  Industry: {data['industry']}")
         print("---------")
 
+class NewsAnalysis1: 
+    # Function to scrape news articles from the internet
+    def scrape_news(url):
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        article_text = ''
+        for paragraph in soup.find_all('p'):
+            article_text += paragraph.text
+        return article_text
+
+    # Function to preprocess the news article text
+    def preprocess_text(text):
+        tokens = word_tokenize(text)
+        tokens = [token for token in tokens if token.isalpha()]
+        tokens = [lemmatizer.lemmatize(token) for token in tokens]
+        tokens = [token for token in tokens if token not in stop_words]
+        return '.join(tokens)'
+
+    # Search for news articles related to the company
+    search_url = f'https://www.google.com/search?q={Company_Name}+news'
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    news_articles = []
+    for result in soup.find_all('div', class_='rc'):
+        article_url = result.find('a')['href']
+        article_text = scrape_news(article_url)
+        news_articles.append((article_url, article_text))
+
+    # Preprocess the news article text
+    lemmatizer = WordNetLemmatizer()
+    stop_words = set(stopwords.words('english'))
+    preprocessed_articles = [(url, preprocess_text(text)) for url, text in news_articles]
+
+    # Create a TF-IDF vectorizer
+    vectorizer = TfidfVectorizer()
+    tfidf_vectors = vectorizer.fit_transform([text for _, text in preprocessed_articles])
+
+    # Train a Multinomial Naive Bayes model
+    model = MultinomialNB()
+    model.fit(tfidf_vectors, [1] * len(preprocessed_articles))  # assume all articles are favourable to stock prices
+
+    # Use the model to predict the sentiment of new news articles
+    def predict_sentiment(article_text):
+        preprocessed_text = preprocess_text(article_text)
+        tfidf_vector = vectorizer.transform([preprocessed_text])
+        sentiment = model.predict(tfidf_vector)[0]
+        if sentiment == 1:
+            return 'The news article is favourable to stock prices, hence it\'s a good investment.'
+        else:
+            return 'The news article is not favourable to stock prices, hence it\'s not a good investment.'
+
+class NewsAnalysis2:
+    # Preprocess the text data
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    data['input_ids'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True))
+    data['attention_mask'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True, max_length=512, padding='max_length', truncation=True))
+
+    # Create a custom dataset class for our data
+    class SentimentDataset(torch.utils.data.Dataset):
+        def __init__(self, data, tokenizer):
+            self.data = data
+            self.tokenizer = tokenizer
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, idx):
+            text = self.data.iloc[idx, 0]
+            label = self.data.iloc[idx, 1]
+            company = self.data.iloc[idx, 2]
+
+            encoding = self.tokenizer.encode_plus(
+                text,
+                add_special_tokens=True,
+                max_length=512,
+                padding='max_length',
+                truncation=True,
+                return_attention_mask=True,
+                return_tensors='pt'
+            )
+
+            return {
+                'input_ids': encoding['input_ids'].flatten(),
+                'attention_mask': encoding['attention_mask'].flatten(),
+                'label': torch.tensor(label, dtype=torch.long),
+                'company': company
+            }
+
+    # Create a data loader for our dataset
+    dataset = SentimentDataset(data, tokenizer)
+    data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+
+    # Define a custom model that combines BERT with a sentiment analysis head, a graph convolutional network, and hierarchical attention
+    class SentimentAnalysisModel(nn.Module):
+        def __init__(self, bert_model, gcn_model, hierarchical_attention_model):
+            super(SentimentAnalysisModel, self).__init__()
+            self.bert_model = bert_model
+            self.gcn_model = gcn_model
+            self.hierarchical_attention_model = hierarchical_attention_model
+            self.dropout = nn.Dropout(0.1)
+            self.classifier = nn.Linear(bert_model.config.hidden_size + gcn_model.hidden_dim, 2)
+
+        def forward(self, input_ids, attention_mask, company):
+            outputs = self.bert_model(input_ids, attention_mask=attention_mask)
+            pooled_output = outputs.pooler_output
+            pooled_output = self.dropout(pooled_output)
+
+            entity_representations = self.gcn_model(company)
+            entity_representations = global_mean_pool(entity_representations, company.batch)
+
+            sentence_representations = self.hierarchical_attention_model(pooled_output, entity_representations)
+            outputs = torch.cat((sentence_representations, entity_representations), dim=1)
+            outputs = self.classifier(outputs)
+            return outputs
+
+    # Load a pre-trained BERT model and fine-tune it for sentiment analysis
+    bert_model = BertModel.from_pretrained('bert-base-uncased')
+
+    # Define a graph convolutional network model
+    class GCNModel(nn.Module):
+        def __init__(self, hidden_dim):
+            super(GCNModel, self).__init__()
+            self.conv1 = GCNConv(hidden_dim, hidden_dim)
+            self.conv2 = GCNConv(hidden_dim, hidden_dim)
+
+        def forward(self, data):
+            x, edge_index = data.x, data.edge_index
+            x = torch.relu(self.conv1(x, edge_index))
+            x = torch.relu(self.conv2(x, edge_index))
+            return x
+
+    gcn_model = GCNModel(hidden_dim=128)
+
+    # Define a hierarchical attention model
+    class HierarchicalAttentionModel(nn.Module):
+        def __init__(self, hidden_dim):
+            super(HierarchicalAttentionModel, self).__init__()
+            self.attention = nn.MultiHeadAttention(hidden_dim, hidden_dim)
+
+        def forward(self, pooled_output, entity_representations):
+            attention_weights = self.attention(pooled_output, entity_representations)
+            sentence_representations = attention_weights * pooled_output
+            return sentence_representations
+
+    hierarchical_attention_model = HierarchicalAttentionModel(hidden_dim=128)
+
+    # Create a sentiment analysis model that combines BERT with a sentiment analysis head, a graph convolutional network, and hierarchical attention
+    model = SentimentAnalysisModel(bert_model, gcn_model, hierarchical_attention_model)
+
+    # Train the model
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+
+    for epoch in range(5):
+        model.train()
+        total_loss = 0
+        for batch in data_loader:
+            input_ids, attention_mask, labels = batch
+            input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(input_ids, attention_mask=attention_mask, company=labels)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f'Epoch {epoch+1}, Loss: {total_loss / len(data_loader)}')
+        model.eval()
+        total_correct = 0
+        with torch.no_grad():
+            for batch in data_loader:
+                input_ids, attention_mask, labels = batch
+                input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
+                outputs = model(input_ids, attention_mask=attention_mask, company=labels)
+                _, predicted = torch.max(outputs, 1)
+                total_correct += (predicted == labels).sum().item()
+        accuracy = total_correct / len(data_loader.dataset)
+        print(f'Epoch {epoch+1}, Accuracy: {accuracy:.4f}')
+
+class PostAalysis:
+    # Preprocess the text data
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    data['input_ids'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True))
+    data['attention_mask'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True, max_length=512, padding='max_length', truncation=True))
+
+    # Create a custom dataset class for our data
+    class SentimentDataset(torch.utils.data.Dataset):
+        def __init__(self, data, tokenizer):
+            self.data = data
+            self.tokenizer = tokenizer
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, idx):
+            text = self.data.iloc[idx, 0]
+            label = self.data.iloc[idx, 1]
+
+            encoding = self.tokenizer.encode_plus(
+                text,
+                add_special_tokens=True,
+                max_length=512,
+                padding='max_length',
+                truncation=True,
+                return_attention_mask=True,
+                return_tensors='pt'
+            )
+
+            return {
+                'input_ids': encoding['input_ids'].flatten(),
+                'attention_mask': encoding['attention_mask'].flatten(),
+                'label': torch.tensor(label, dtype=torch.long)
+            }
+
+        # Create a data loader for our dataset
+        dataset = SentimentDataset(data, tokenizer)
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+
+        # Define a custom model that combines BERT with a sentiment analysis head
+        class SentimentAnalysisModel(nn.Module):
+            def __init__(self, bert_model):
+                super(SentimentAnalysisModel, self).__init__()
+                self.bert_model = bert_model
+                self.dropout = nn.Dropout(0.1)
+                self.classifier = nn.Linear(self.bert_model.config.hidden_size, 2)
+
+            def forward(self, input_ids, attention_mask):
+                outputs = self.bert_model(input_ids, attention_mask=attention_mask)
+                pooled_output = outputs.pooler_output
+                pooled_output = self.dropout(pooled_output)
+                outputs = self.classifier(pooled_output)
+                return outputs
+
+        # Load a pre-trained BERT model and fine-tune it for sentiment analysis
+        bert_model = BertModel.from_pretrained('bert-base-uncased')
+        model = SentimentAnalysisModel(bert_model)
+
+        # Train the model
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters(), lr=1e-5)
+
+        for epoch in range(5):
+            model.train()
+            total_loss = 0
+            for batch in data_loader:
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['label'].to(device)
+
+                optimizer.zero_grad()
+
+                outputs = model(input_ids, attention_mask)
+                loss = criterion(outputs, labels)
+
+                loss.backward()
+                optimizer.step()
+
+                total_loss += loss.item()
+
+            print(f'Epoch {epoch+1}, Loss: {total_loss / len(data_loader)}')
+
+        model.eval()
+
+        # Evaluate the model
+        test_data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+        total_correct = 0
+        with torch.no_grad():
+            for batch in test_data_loader:
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['label'].to(device)
+
+                outputs = model(input_ids, attention_mask)
+                _, predicted = torch.max(outputs, 1)
+                total_correct += (predicted == labels).sum().item()
+
+        accuracy = total_correct / len(dataset)
+        print(f'Test Accuracy: {accuracy:.4f}')
+
 class SWOTanalysis:
     # Create a DataFrame from the SWOT data
     swot_df = pd.DataFrame(swot_data)
@@ -3286,6 +3615,95 @@ class SWOTanalysis:
     plt.table(cellText=swot_df.values, colLabels=swot_df.columns, loc='center')
     plt.title('SWOT Analysis')
     plt.show()
+
+class StockPricePredictor:
+    def __init__(self, data, seq_len, batch_size, epochs, exog_vars, num_steps_ahead, num_stocks):
+        self.data = data
+        self.seq_len = seq_len
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.exog_vars = exog_vars
+        self.num_steps_ahead = num_steps_ahead
+        self.num_stocks = num_stocks
+        self.scaler = MinMaxScaler()
+        self.model = self.build_model()
+
+    def build_model(self):
+        inputs = Input(shape=(self.seq_len, 1))
+        exog_inputs = Input(shape=(self.seq_len, len(self.exog_vars)))
+        stock_inputs = Input(shape=(self.seq_len, self.num_stocks))
+        x = Bidirectional(LSTM(128, return_sequences=True))(inputs)
+        x = Dropout(0.2)(x)
+        x = Conv1D(64, kernel_size=3, activation='relu')(x)
+        x = MaxPooling1D(pool_size=2)(x)
+        x = concatenate([x, exog_inputs, stock_inputs])
+        x = Dense(128, activation='relu')(x)
+        x = LayerNormalization()(x)
+        x = TransformerEncoder(num_heads=8, num_layers=2)(x)
+        x = MultiHeadAttention(num_heads=8)(x, x)
+        x = Dense(self.num_steps_ahead * self.num_stocks)(x)
+        x = Reshape((self.num_steps_ahead, self.num_stocks))(x)
+        attention = Attention()([x, x])
+        x = concatenate([x, attention])
+        outputs = Dense(self.num_steps_ahead * self.num_stocks)(x)
+        outputs = Reshape((self.num_steps_ahead, self.num_stocks))(outputs)
+        model = Model(inputs=[inputs, exog_inputs, stock_inputs], outputs=outputs)
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        return model
+
+    def prepare_data(self):
+        scaled_data = self.scaler.fit_transform(self.data.values.reshape(-1, 1))
+        X, y, exog, stocks = [], [], [], []
+        for i in range(self.seq_len, len(scaled_data)):
+            X.append(scaled_data[i-self.seq_len:i])
+            y.append(scaled_data[i:i+self.num_steps_ahead])
+            exog.append(self.exog_vars[i-self.seq_len:i])
+            stocks.append(self.data.iloc[i-self.seq_len:i, 1:])
+        X, y, exog, stocks = np.array(X), np.array(y), np.array(exog), np.array(stocks)
+        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+        exog = np.reshape(exog, (exog.shape[0], exog.shape[1], len(self.exog_vars)))
+        stocks = np.reshape(stocks, (stocks.shape[0], stocks.shape[1], self.num_stocks))
+        return X, y, exog, stocks
+
+    def train(self):
+        X, y, exog, stocks = self.prepare_data()
+        callbacks = [EarlyStopping(patience=5), ReduceLROnPlateau(patience=3)]
+        self.model.fit([X, exog, stocks], y, epochs=self.epochs, batch_size=self.batch_size, verbose=2, callbacks=callbacks)
+
+    def predict(self, data, exog_vars, stocks):
+        scaled_data = self.scaler.transform(data.values.reshape(-1, 1))
+        X = np.array([scaled_data[-self.seq_len:]])
+        exog = np.array([exog_vars[-self.seq_len:]])
+        stocks = np.array([stocks[-self.seq_len:]])
+        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+        exog = np.reshape(exog, (exog.shape[0], exog.shape[1], len(self.exog_vars)))
+        stocks = np.reshape(stocks, (stocks.shape[0], stocks.shape[1], self.num_stocks))
+        return self.model.predict([X, exog, stocks])
+
+    def optimize_hyperparameters(self):
+        space = [Real(0.01, 0.1, name='learning_rate'), Integer(1, 5, name='num_layers'), Integer(64, 256, name='hidden_size')]
+        @use_named_args(space)
+        def objective(learning_rate, num_layers, hidden_size):
+            self.model.compile(optimizer=Adam(lr=learning_rate), loss='mean_squared_error')
+            self.model.fit([X, exog, stocks], y, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
+            return self.model.evaluate([X, exog, stocks], y, verbose=0)
+        res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
+        plot_convergence(res_gp)
+        return res_gp.x
+
+    def explain_predictions(self, data, exog_vars, stocks):
+        explainer = KernelExplainer(self.model.predict, data)
+        shap_values = explainer.shap_values(data)
+        return shap_values
+
+    def online_learning(self, new_data, exog_vars, stocks):
+        self.model.fit([new_data, exog_vars, stocks], epochs=1, batch_size=self.batch_size, verbose=0)
+        self.model.save_weights('online_learning_weights.h5')
+
+    def genetic_algorithm_optimization(self):
+        ga = GeneticAlgorithm(self.model, self.data, self.exog_vars, self.stocks, self.epochs, self.batch_size)
+        ga.optimize()
+        return ga.best_solution
 
 class ARIMAtrain:
     # Load your dataset (replace with your own data)
@@ -3346,18 +3764,9 @@ class ARIMAtrain:
     print(f'Mean Squared Error: {mse:.2f}')
 
 class to_do:
-    #sentiment analysis using python
-    #develop interface for it
     #develop as backend
     #develop a frontend
-    #import social media analysis model and implement across social media
     #develop more sohisticated market analysis modelling
     #develop competitive pricing model for this
-    #add more market trend analysis algorithms for advanced, more accurate analysis
-    #add more data sources (along the lines of news websites) for more accurate analysis
-    #add more reference websites for more in-depth market anaysis
-    #develop news article sentiment analysis model
-    #import the model into the project
     #Research into Financial markets to understand risk management
     #develop stock insurance policy
-    #develop model to put stops, only low stops though
