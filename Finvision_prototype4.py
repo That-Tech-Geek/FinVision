@@ -2420,7 +2420,7 @@ class AIsearch:
             return company_name, retrieve_financial_data(company_name), retrieve_news_articles(company_name)
     def retrieve_financial_data(company_name: str) -> list:
         Company_name = company_name.replace(" ", "+")
-        Company_Name = Company_name.replace("&", "+%26+")
+        Company_Name = Company_name.replace(" & ", "+%26+")
         url = f"https://www.google.com/search?q={Company_Name}+financials"
         response = requests.get(url)
         response.raise_for_status()  # Raise an exception for bad status codes
