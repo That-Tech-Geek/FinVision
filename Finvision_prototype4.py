@@ -3289,6 +3289,12 @@ class NIFTY500:
         'Opportunities': opportunities,
         'Threats': threats
     }
+    # Track the NSE code 'CRSLDX'
+    nifty500 = NIFTY500()
+    nifty500.track_stock('CRSLDX')
+    nifty500.plot_candlestick()
+    nifty500.add_volume()
+    nifty500.save('crsldx_candlestick_chart.png')
 
 class StockAnalysis: 
     # Loop through each company and fetch data
