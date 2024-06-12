@@ -43,6 +43,7 @@ class Imports:
     from torch_geometric.data import Data
     from sklearn.preprocessing import LabelEncoder
 
+#Add 2384 NSE-registered companies
 class NSEcorp:
     nse_companies = {
         "INFY"; "Infosys",
