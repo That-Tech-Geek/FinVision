@@ -48,7 +48,7 @@ class Imports:
 class NSEcorp:
     nse_companies = {
         "INFY"; "Infosys",
-        "TCS"; "Tata Consultancy Services",
+        "TCS" ; "Tata Consultancy Services",
         "HDFCBANK"; "HDFC Bank",
         "RELIANCE" ; "Reliance Industries Limited",
         "TCS" ; "Tata Consultancy Services Limited",
