@@ -42,8 +42,9 @@ class Imports:
     from torch_geometric.nn import GCNConv, global_mean_pool
     from torch_geometric.data import Data
     from sklearn.preprocessing import LabelEncoder
+    import matplotlib.pyplot as plt
+    import pandas as pd
 
-#Add 2384 NSE-registered companies
 class NSEcorp:
     nse_companies = {
         "INFY"; "Infosys",
@@ -3307,6 +3308,37 @@ class StockAnalysis:
         print(f"  Industry: {data['industry']}")
         print("---------")
 
+class Candlestick:
+    def __init__(self, data: pd.DataFrame):
+        self.data = data
+
+    def plot(self, title: str = "Candlestick Chart", figsize: tuple = (12, 6)):
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_title(title)
+        plt.plot(self.data['Open'], label='Open')
+        plt.plot(self.data['High'], label='High')
+        plt.plot(self.data['Low'], label='Low')
+        plt.plot(self.data['Close'], label='Close')
+        plt.legend(loc='upper left')
+        plt.show()
+
+    def add_volume(self):
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+        ax1.set_title("Candlestick Chart with Volume")
+        ax1.plot(self.data['Open'], label='Open')
+        ax1.plot(self.data['High'], label='High')
+        ax1.plot(self.data['Low'], label='Low')
+        ax1.plot(self.data['Close'], label='Close')
+        ax1.legend(loc='upper left')
+        ax2.bar(self.data.index, self.data['Volume'])
+        ax2.set_ylabel('Volume')
+        plt.show()
+
+    candlestick = Candlestick(data)
+    candlestick.plot()
+    candlestick.add_volume()
+    candlestick.save('candlestick_chart.png')
+
 class NewsAnalysis1: 
     # Function to scrape news articles from the internet
     def scrape_news(url):
@@ -3869,7 +3901,7 @@ class ARIMAtrain:
 
 class to_do:
     #develop as backend
-    #develop a frontend
-    #develop competitive pricing model for this
-    #Research into Financial markets to understand risk management
-    #develop stock insurance policy
+    '''develop a frontend
+       develop competitive pricing model for this
+       Research into Financial markets to understand risk management
+       develop stock insurance policy'''
