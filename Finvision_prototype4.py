@@ -1,56 +1,56 @@
 # Import Necessary Libraries for Program
 class Imports:
-    from bs4 import BeautifulSoup
+    # Web scraping and parsing
+    import bs4
     from newspaper import Article
-    import numpy as np
+
+    # Statistical analysis and modeling
     from scipy.stats import linregress
-    import numpy as np
     from statsmodels.tsa.arima.model import ARIMA
     from sklearn.metrics import mean_squared_error
-    from mpl_finance import candlestick_ohlc
-    import matplotlib.dates as mpl_dates
-    import talib
-    import yfinance as yf
-    import requests
+
+    # Data visualization
+    import mpl_finance
     import matplotlib.pyplot as plt
+
+    # Machine learning and deep learning
     from sklearn.preprocessing import MinMaxScaler
     from keras.models import Model
-    from keras.layers import LSTM, Dense, Dropout, Input, Bidirectional, Attention, Reshape, concatenate, Conv1D, MaxPooling1D
-    from keras.layers.normalization import LayerNormalization
+    from keras.layers import (
+        LSTM, Dense, Dropout, Input, Bidirectional, Attention, Reshape, concatenate,
+        Conv1D, MaxPooling1D, LayerNormalization
+    )
     from keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from keras.utils import to_categorical
+    from tensorflow.keras.layers import MultiHeadAttention, TransformerEncoder, Embedding, Flatten
+
+    # Gaussian process and optimization
     from sklearn.gaussian_process import GaussianProcessRegressor
     from skopt import gp_minimize
     from skopt.space import Real, Integer
     from skopt.plots import plot_convergence
-    from tensorflow.keras.layers import MultiHeadAttention, TransformerEncoder
-    from tensorflow.keras.layers import Embedding, Flatten
-    from shap import KernelExplainer, TreeExplainer
-    from genetic_algorithm import GeneticAlgorithm
+
+    # Natural language processing
     import nltk
     from nltk.tokenize import word_tokenize
     from nltk.corpus import stopwords
     from nltk.stem import WordNetLemmatizer
     from sklearn.feature_extraction.text import TfidfVectorizer
+
+    # Model evaluation and selection
     from sklearn.model_selection import train_test_split
     from sklearn.naive_bayes import MultinomialNB
     from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
+
+    # Transformers and graph neural networks
     from transformers import BertTokenizer, BertModel
     from torch_geometric.nn import GCNConv, global_mean_pool
     from torch_geometric.data import Data
-    from sklearn.preprocessing import LabelEncoder
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    from torch.utils.data import Dataset, DataLoader
-    import networkx as nx
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score
-    from sklearn.decomposition import PCA
+
+    # Utilities
+    import torch.utils.data
+    from shap import KernelExplainer, TreeExplainer
+    from genetic_algorithm import GeneticAlgorithm
 
 # Create NSE Directory of 2384 Companies
 class NSEcorp:
@@ -2761,7 +2761,6 @@ class AIValidation:
         else:
             return False
 
-# Accomodate Legal Restrictions and maintain own data base for each company. Sure, it's too much data but what can we do?
 # Call AI to search for all companies
 class AIsearch:
     def search_company(initials):
@@ -4084,99 +4083,86 @@ class CreditRiskAnalysis:
         print(f"\nThanks for the chat! Based on our talk, it seems you're a {risk_category}.")
         print("Remember, this is just a starting point. The world of Finance opens its arms for you, and FinVision is here to greet you at the door!")
 
-# More advanced Stock price predictor, unidimensional
-class StockPricePredictor:
-    def __init__(self, data, seq_len, batch_size, epochs, exog_vars, num_steps_ahead, num_stocks):
-        self.data = data
-        self.seq_len = seq_len
-        self.batch_size = batch_size
-        self.epochs = epochs
-        self.exog_vars = exog_vars
-        self.num_steps_ahead = num_steps_ahead
-        self.num_stocks = num_stocks
-        self.scaler = MinMaxScaler()
-        self.model = self.build_model()
+# Price Predicting Model
+class PricePredictor:
+    class StockDataset(Dataset):
+        def __init__(self, data, seq_len):
+            self.data = data
+            self.seq_len = seq_len
 
-    def build_model(self):
-        inputs = Input(shape=(self.seq_len, 1))
-        exog_inputs = Input(shape=(self.seq_len, len(self.exog_vars)))
-        stock_inputs = Input(shape=(self.seq_len, self.num_stocks))
-        x = Bidirectional(LSTM(128, return_sequences=True))(inputs)
-        x = Dropout(0.2)(x)
-        x = Conv1D(64, kernel_size=3, activation='relu')(x)
-        x = MaxPooling1D(pool_size=2)(x)
-        x = concatenate([x, exog_inputs, stock_inputs])
-        x = Dense(128, activation='relu')(x)
-        x = LayerNormalization()(x)
-        x = TransformerEncoder(num_heads=8, num_layers=2)(x)
-        x = MultiHeadAttention(num_heads=8)(x, x)
-        x = Dense(self.num_steps_ahead * self.num_stocks)(x)
-        x = Reshape((self.num_steps_ahead, self.num_stocks))(x)
-        attention = Attention()([x, x])
-        x = concatenate([x, attention])
-        outputs = Dense(self.num_steps_ahead * self.num_stocks)(x)
-        outputs = Reshape((self.num_steps_ahead, self.num_stocks))(outputs)
-        model = Model(inputs=[inputs, exog_inputs, stock_inputs], outputs=outputs)
-        model.compile(optimizer='adam', loss='mean_squared_error')
-        return model
+        def __len__(self):
+            return len(self.data) - self.seq_len
 
-    def prepare_data(self):
-        scaled_data = self.scaler.fit_transform(self.data.values.reshape(-1, 1))
-        X, y, exog, stocks = [], [], [], []
-        for i in range(self.seq_len, len(scaled_data)):
-            X.append(scaled_data[i-self.seq_len:i])
-            y.append(scaled_data[i:i+self.num_steps_ahead])
-            exog.append(self.exog_vars[i-self.seq_len:i])
-            stocks.append(self.data.iloc[i-self.seq_len:i, 1:])
-        X, y, exog, stocks = np.array(X), np.array(y), np.array(exog), np.array(stocks)
-        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-        exog = np.reshape(exog, (exog.shape[0], exog.shape[1], len(self.exog_vars)))
-        stocks = np.reshape(stocks, (stocks.shape[0], stocks.shape[1], self.num_stocks))
-        return X, y, exog, stocks
+        def __getitem__(self, idx):
+            seq = self.data[idx:idx+self.seq_len]
+            label = self.data[idx+self.seq_len, 0]
+            return {'seq': torch.tensor(seq), 'label': torch.tensor(label)}
 
-    def train(self):
-        X, y, exog, stocks = self.prepare_data()
-        callbacks = [EarlyStopping(patience=5), ReduceLROnPlateau(patience=3)]
-        self.model.fit([X, exog, stocks], y, epochs=self.epochs, batch_size=self.batch_size, verbose=2, callbacks=callbacks)
+    class LSTMModel(nn.Module):
+        def __init__(self, input_dim, hidden_dim, output_dim):
+            super(LSTMModel, self).__init__()
+            self.hidden_dim = hidden_dim
+            self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers=2, batch_first=True)
+            self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def predict(self, data, exog_vars, stocks):
-        scaled_data = self.scaler.transform(data.values.reshape(-1, 1))
-        X = np.array([scaled_data[-self.seq_len:]])
-        exog = np.array([exog_vars[-self.seq_len:]])
-        stocks = np.array([stocks[-self.seq_len:]])
-        X = np.reshape(X, (X.shape[0], X.shape[1], 1))
-        exog = np.reshape(exog, (exog.shape[0], exog.shape[1], len(self.exog_vars)))
-        stocks = np.reshape(stocks, (stocks.shape[0], stocks.shape[1], self.num_stocks))
-        return self.model.predict([X, exog, stocks])
+        def forward(self, x):
+            h0 = torch.zeros(2, x.size(0), self.hidden_dim).to(x.device)
+            c0 = torch.zeros(2, x.size(0), self.hidden_dim).to(x.device)
+            out, _ = self.lstm(x, (h0, c0))
+            out = self.fc(out[:, -1, :])
+            return out
 
-    def optimize_hyperparameters(self):
-        space = [Real(0.01, 0.1, name='learning_rate'), Integer(1, 5, name='num_layers'), Integer(64, 256, name='hidden_size')]
-        @use_named_args(space)
-        def objective(learning_rate, num_layers, hidden_size):
-            self.model.compile(optimizer=Adam(lr=learning_rate), loss='mean_squared_error')
-            self.model.fit([X, exog, stocks], y, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
-            return self.model.evaluate([X, exog, stocks], y, verbose=0)
-        res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)
-        plot_convergence(res_gp)
-        return res_gp.x
+    class EarlyStopping:
+        def __init__(self, patience=3, min_delta=0):
+            self.patience = patience
+            self.min_delta = min_delta
+            self.counter = 0
+            self.min_loss = np.Inf
 
-    def explain_predictions(self, data, exog_vars, stocks):
-        explainer = KernelExplainer(self.model.predict, data)
-        shap_values = explainer.shap_values(data)
-        return shap_values
+        def __call__(self, loss):
+            if loss < self.min_loss:
+                self.min_loss = loss
+                self.counter = 0
+            elif loss > (self.min_loss + self.min_delta):
+                self.counter += 1
+                if self.counter >= self.patience:
+                    print('Early stopping')
+                    return True
+            return False
 
-    def online_learning(self, new_data, exog_vars, stocks):
-        self.model.fit([new_data, exog_vars, stocks], epochs=1, batch_size=self.batch_size, verbose=0)
-        self.model.save_weights('online_learning_weights.h5')
+    df = pd.read_csv('stock_market_data-AAL.csv')
+    df = df.sort_values('Date')
+    df['Mid Price'] = (df['Low'] + df['High']) / 2.0
+    mid_prices = df['Mid Price'].values.reshape(-1, 1)
 
-    def genetic_algorithm_optimization(self):
-        ga = GeneticAlgorithm(self.model, self.data, self.exog_vars, self.stocks, self.epochs, self.batch_size)
-        ga.optimize()
-        return ga.best_solution
+    scaler = MinMaxScaler()
+    mid_prices_scaled = scaler.fit_transform(mid_prices)
 
-# Basic Rolling Average model to predict stockprices influenced unidimensionally
-class ARIMAtrain:
-    # Load your dataset (replace with your own data)
+    dataset = StockDataset(mid_prices_scaled, seq_len=20)
+    data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+    model = LSTMModel(input_dim=1, hidden_dim=50, output_dim=1)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    early_stopping = EarlyStopping(patience=5)
+
+    for epoch in range(100):
+        for batch in data_loader:
+            seq, label = batch['seq'].float().to(device), batch['label'].float().to(device)
+            optimizer.zero_grad()
+            output = model(seq)
+            loss = criterion(output, label)
+            loss.backward()
+            optimizer.step()
+        if early_stopping(loss.item()):
+            break
+
+    print('Training finished')
+
     df = pd.read_csv('prices.csv', index_col='date', parse_dates=['date'])
 
     # Convert the index to a datetime object
@@ -4271,41 +4257,38 @@ class BiasDetect:
         
         return X_train_scaled, X_test_scaled, y_train, y_test
 
-# AI-empowered SWOT analysis model
+# AI-empowered SWOT analysis model 
 class SWOTanalysis:
-    # Create a DataFrame from the SWOT data
-    swot_df = pd.DataFrame(swot_data)
+        def __init__(self):
+            self.swot_data = self.get_swot_data()
+            self.swot_df = pd.DataFrame(self.swot_data)
+            self.plot_swot_analysis()
 
-    # Plot the SWOT analysis as a table
-    plt.figure(figsize=(10, 6))
-    plt.axis('tight')
-    plt.axis('off')
-    plt.grid(b=None)
-    plt.table(cellText=[strengths, weaknesses, opportunities, threats], colLabels=['SWOT Analysis'], loc='center')
-    plt.title('SWOT Analysis')
-    plt.show()
-    # Define the SWOT analysis data
-    swot_data = {
-        'Strengths': [input("Enter Strength 1: "), input("Enter Strength 2: "), input("Enter Strength 3: ")],
-        'Weaknesses': [input("Enter Weakness 1: "), input("Enter Weakness 2: "), input("Enter Weakness 3: ")],
-        'Opportunities': [input("Enter Opportunity 1: "), input("Enter Opportunity 2: "), input("Enter Opportunity 3: ")],
-        'Threats': [input("Enter Threat 1: "), input("Enter Threat 2: "), input("Enter Threat 3: ")]
-    }
+        def get_swot_data(self):
+            strengths = [input("Enter Factor favouring future price increase 1: "), input("Enter Factor favouring future price increase 2: "), input("Enter Factor favouring future price increase 3: ")]
+            weaknesses = [input("Enter Factor not favouring future price increase 1: "), input("Enter Factor not favouring future price increase 2: "), input("Enter Factor not favouring future price increase 3: ")]
+            opportunities = [input("Enter Opportunity for future price increase 1: "), input("Enter Opportunity for future price increase 2: "), input("Enter Opportunity for future price increase 3: ")]
+            threats = [input("Enter Threat to future price increase 1: "), input("Enter Threat to future price increase 2: "), input("Enter Threat to future price increase 3: ")]
+            return {
+                'Strengths': strengths,
+                'Weaknesses': weaknesses,
+                'Opportunities': opportunities,
+                'Threats': threats
+            }
 
-    # Create a DataFrame from the SWOT data
-    swot_df = pd.DataFrame(swot_data)
+        def plot_swot_analysis(self):
+            plt.figure(figsize=(10, 6))
+            plt.axis('tight')
+            plt.axis('off')
+            plt.grid(b=None)
+            plt.table(cellText=self.swot_df.values, colLabels=self.swot_df.columns, loc='center')
+            plt.title('SWOT Analysis for Future Price Increase')
+            plt.show()
 
-    # Plot the SWOT analysis as a table
-    plt.figure(figsize=(10, 6))
-    plt.axis('tight')
-    plt.axis('off')
-    plt.grid(b=None)
-    plt.table(cellText=swot_df.values, colLabels=swot_df.columns, loc='center')
-    plt.title('SWOT Analysis')
-    plt.show()
+        swot_analysis = SWOTanalysis()
 
 # Develop Competitive Pricing Model
-
+class CompetitivePricingModel:
     def __init__(self, user_profile, company_sector, company_data, market_data, economic_data, industry_data, competitor_data, macroeconomic_data, customer_data, product_data, sales_data, marketing_data):
         self.user_profile = user_profile
         self.company_sector = company_sector
@@ -4494,8 +4477,8 @@ class SWOTanalysis:
             self.sales_growth = sales_growth
 
     class MarketingData:
-    def __init__(self, marketing_efficiency):
-        self.marketing_efficiency = marketing_efficiency
+        def __init__(self, marketing_efficiency):
+            self.marketing_efficiency = marketing_efficiency
 
 # Develop Competitive Pricing Model for consultation to be paid by UPI
 class AdvancedCompetitivePricingModel:
