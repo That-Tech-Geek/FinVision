@@ -3,7 +3,11 @@
 ## Supported Versions
 | Version | Supported          |
 | ------- | ------------------ |
-| v1.0   | :white_check_mark: |
+| v1.1   | ❎ |
+| v1.1   | ❎ |
+| v1.3   | :white_check_mark: |
+| v1.4-PR   | :white_check_mark: |
+| v1.5-PR  | :white_check_mark: |
 
 ## Reporting Security Vulnerabilities
 We appreciate your help in keeping FinVision secure. If you discover a security vulnerability, please report it responsibly by following these steps:
