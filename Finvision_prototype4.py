@@ -45,6 +45,7 @@ class Imports:
     import matplotlib.pyplot as plt
     import pandas as pd
 
+# Create NSE Directory of 2384 Companies
 class NSEcorp:
     nse_companies = {
         "INFY"; "Infosys",
@@ -2432,6 +2433,7 @@ class NSEcorp:
     }
     # User searches for company through NSE Initials.
 
+# User inputs 
 class UserSearch:
     def search_company(initials):
             return nse_companies.get(initials.upper(), "Company not found")
@@ -2442,6 +2444,260 @@ class UserSearch:
             break
         print(search_company(initials))
 
+# User does Personality Test
+class PersonalityTest:
+    from abc import ABC, abstractmethod
+    from enum import Enum
+
+    class NetWorth(Enum):
+        UNDER_100K = 1
+        ONE_HUNDRED_TO_FIVE_HUNDRED_K = 2
+        OVER_FIVE_HUNDRED_K = 3
+
+    class IncomeLevel(Enum):
+        UNDER_50K = 1
+        FIFTY_TO_100K = 2
+        OVER_100K = 3
+
+    class AgeGroup(Enum):
+        UNDER_30 = 1
+        THIRTY_TO_FIFTY = 2
+        OVER_FIFTY = 3
+
+    class InvestmentExperience(Enum):
+        BEGINNER = 1
+        INTERMEDIATE = 2
+        ADVANCED = 3
+
+    class FinancialGoal(Enum):
+        RETIREMENT = 1
+        WEALTH_ACCUMULATION = 2
+        INCOME_GENERATION = 3
+
+    class InvestmentStyle(Enum):
+        CONSERVATIVE = 1
+        MODERATE = 2
+        AGGRESSIVE = 3
+
+    class InvestmentHorizon(Enum):
+        SHORT_TERM = 1
+        MEDIUM_TERM = 2
+        LONG_TERM = 3
+
+    class RiskTolerance(Enum):
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+
+    class Occupation(Enum):
+        STUDENT = 1
+        WORKING_PROFESSIONAL = 2
+        BUSINESS_OWNER = 3
+
+    class Education(Enum):
+        HIGH_SCHOOL = 1
+        COLLEGE = 2
+        POSTGRADUATE = 3
+
+    class MaritalStatus(Enum):
+        SINGLE = 1
+        MARRIED = 2
+        DIVORCED = 3
+
+    class Dependents(Enum):
+        NONE = 1
+        ONE = 2
+        TWO_OR_MORE = 3
+
+    class MultipleChoiceQuestion:
+        def __init__(self, category, weight, question, options):
+            self.category = category
+            self.weight = weight
+            self.question = question
+            self.options = options
+
+    class InvestmentProfile:
+        def __init__(self, style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents):
+            self.style = style
+            self.horizon = horizon
+            self.tolerance = tolerance
+            self.goal = goal
+            self.experience = experience
+            self.age = age
+            self.income = income
+            self.net_worth = net_worth
+            self.occupation = occupation
+            self.education = education
+            self.marital_status = marital_status
+            self.dependents = dependents
+
+    class Question(ABC):
+        def __init__(self, category, weight):
+            self.category = category
+            self.weight = weight
+            self.options = []
+
+        def ask(self):
+            pass
+    class InvestingPersonalityTest:
+        def __init__(self):
+            self.questions = [
+                MultipleChoiceQuestion("Risk Tolerance", 2, "How much risk are you willing to take?", ["Very little", "Some", "A lot"]),
+                MultipleChoiceQuestion("Investment Horizon", 3, "What is your investment time frame?", ["Less than 1 year", "1-5 years", "More than 5 years"]),
+                MultipleChoiceQuestion("Investment Style", 2, "What is your investment goal?", ["Preserve capital", "Generate income", "Grow wealth"]),
+                MultipleChoiceQuestion("Financial Goal", 2, "What is your financial goal?", ["Retirement", "Wealth accumulation", "Income generation"]),
+                MultipleChoiceQuestion("Investment Experience", 1, "What is your investment experience?", ["Beginner", "Intermediate", "Advanced"]),
+                MultipleChoiceQuestion("Age", 1, "What is your age?", ["Under 30", "30-50", "Over 50"]),
+                MultipleChoiceQuestion("Income", 1, "What is your annual income?", ["Less than $50,000", "$50,000-$100,000", "More than $100,000"]),
+                MultipleChoiceQuestion("Net Worth", 1, "What is your net worth?", ["Less than $100,000", "$100,000-$500,000", "More than $500,000"]),
+                MultipleChoiceQuestion("Occupation", 1, "What is your occupation?", ["Student", "Working professional", "Business owner"]),
+                MultipleChoiceQuestion("Education", 1, "What is your education level?", ["High school", "College", "Postgraduate"]),
+                MultipleChoiceQuestion("Marital Status", 1, "What is your marital status?", ["Single", "Married", "Divorced"]),
+                MultipleChoiceQuestion("Dependents", 1, "How many dependents do you have?", ["None", "One", "Two or more"]),
+                # Add more questions here
+            ]
+
+        def administer_test(self):
+            answers = {}
+            for question in self.questions:
+                answer = input(question.question + " ")
+                answers[question.category] = answer
+            return answers
+
+        def calculate_profile(self, answers):
+            style= self.calculate_investment_style(answers)
+            horizon = self.calculate_investment_horizon(answers)
+            tolerance = self.calculate_risk_tolerance(answers)
+            goal = self.calculate_financial_goal(answers)
+            experience = self.calculate_investment_experience(answers)
+            age = self.calculate_age(answers)
+            income = self.calculate_income(answers)
+            net_worth = self.calculate_net_worth(answers)
+            occupation = self.calculate_occupation(answers)
+            education = self.calculate_education(answers)
+            marital_status = self.calculate_marital_status(answers)
+            dependents = self.calculate_dependents(answers)
+
+            return InvestmentProfile(style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents)
+
+        def calculate_investment_style(self, answers):
+            if answers["Investment Style"] == "Preserve capital":
+                return InvestmentStyle.CONSERVATIVE
+            elif answers["Investment Style"] == "Generate income":
+                return InvestmentStyle.MODERATE
+            else:
+                return InvestmentStyle.AGGRESSIVE
+
+        def calculate_investment_horizon(self, answers):
+            if answers["Investment Horizon"] == "Less than 1 year":
+                return InvestmentHorizon.SHORT_TERM
+            elif answers["Investment Horizon"] == "1-5 years":
+                return InvestmentHorizon.MEDIUM_TERM
+            else:
+                return InvestmentHorizon.LONG_TERM
+
+        def calculate_risk_tolerance(self, answers):
+            if answers["Risk Tolerance"] == "Very little":
+                return RiskTolerance.LOW
+            elif answers["Risk Tolerance"] == "Some":
+                return RiskTolerance.MEDIUM
+            else:
+                return RiskTolerance.HIGH
+
+        def calculate_financial_goal(self, answers):
+            if answers["Financial Goal"] == "Retirement":
+                return FinancialGoal.RETIREMENT
+            elif answers["Financial Goal"] == "Wealth accumulation":
+                return FinancialGoal.WEALTH_ACCUMULATION
+            else:
+                return FinancialGoal.INCOME_GENERATION
+
+        def calculate_investment_experience(self, answers):
+            if answers["Investment Experience"] == "Beginner":
+                return InvestmentExperience.BEGINNER
+            elif answers["Investment Experience"] == "Intermediate":
+                return InvestmentExperience.INTERMEDIATE
+            else:
+                return InvestmentExperience.ADVANCED
+
+        def calculate_age(self, answers):
+            if answers["Age"] == "Under 30":
+                return AgeGroup.UNDER_30
+            elif answers["Age"] == "30-50":
+                return AgeGroup.THIRTY_TO_FIFTY
+            else:
+                return AgeGroup.OVER_FIFTY
+
+        def calculate_income(self, answers):
+            if answers["Income"] == "Less than $50,000":
+                return IncomeLevel.UNDER_50K
+            elif answers["Income"] == "$50,000-$100,000":
+                return IncomeLevel.FIFTY_TO_100K
+            else:
+                return IncomeLevel.OVER_100K
+
+        def calculate_net_worth(self, answers):
+            if answers["Net Worth"] == "Less than $100,000":
+                return NetWorth.UNDER_100K
+            elif answers["Net Worth"] == "$100,000-$500,000":
+                return NetWorth.ONE_HUNDRED_TO_FIVE_HUNDRED_K
+            else:
+                return NetWorth.OVER_FIVE_HUNDRED_K
+
+        def calculate_occupation(self, answers):
+            if answers["Occupation"] == "Student":
+                return Occupation.STUDENT
+            elif answers["Occupation"] == "Working professional":
+                return Occupation.WORKING_PROFESSIONAL
+            else:
+                return Occupation.BUSINESS_OWNER
+
+        def calculate_education(self, answers):
+            if answers["Education"] == "High school":
+                return Education.HIGH_SCHOOL
+            elif answers["Education"] == "College":
+                return Education.COLLEGE
+            else:
+                return Education.POSTGRADUATE
+
+        def calculate_marital_status(self, answers):
+            if answers["Marital Status"] == "Single":
+                return MaritalStatus.SINGLE
+            elif answers["Marital Status"] == "Married":
+                return MaritalStatus.MARRIED
+            else:
+                return MaritalStatus.DIVORCED
+
+        def calculate_dependents(self, answers):
+            if answers["Dependents"] == "None":
+                return Dependents.NONE
+            elif answers["Dependents"] == "One":
+                return Dependents.ONE
+            else:
+                return Dependents.TWO_OR_MORE
+
+        def main():
+            test = InvestingPersonalityTest()
+            answers = test.administer_test()
+            profile = test.calculate_profile(answers)
+            print("Your investment profile is:")
+            print("Investment Style:", profile.style)
+            print("Investment Horizon:", profile.horizon)
+            print("Risk Tolerance:", profile.tolerance)
+            print("Financial Goal:", profile.goal)
+            print("Investment Experience:", profile.experience)
+            print("Age:", profile.age)
+            print("Income:", profile.income)
+            print("Net Worth:", profile.net_worth)
+            print("Occupation:", profile.occupation)
+            print("Education:", profile.education)
+            print("Marital Status:", profile.marital_status)
+            print("Dependents:", profile.dependents)
+
+        if __name__ == "__main__":
+            main()
+
+# Call AI to search for all companies
 class AIsearch:
     def search_company(initials):
         company_name = nse_companies.get(initials.upper(), "Company not found")
@@ -2662,6 +2918,7 @@ class AIsearch:
         print("Data not saved. Exiting the program.")
         exit()
 
+# Create NIFTY500 Directory
 class NIFTY500: 
     nifty500 = {
     '360 ONE WAM Ltd.' : {'sector' : 'Financial Services'},
@@ -3296,6 +3553,7 @@ class NIFTY500:
     nifty500.add_volume()
     nifty500.save('crsldx_candlestick_chart.png')
 
+# AI analyzes company stock based on data collected
 class StockAnalysis: 
     # Loop through each company and fetch data
     for company in NIFTY500.split():
@@ -3314,6 +3572,7 @@ class StockAnalysis:
         print(f"  Industry: {data['industry']}")
         print("---------")
 
+# AI constructs a candlestick chart which is then saved as file in user system
 class Candlestick:
     # Get financial data from Yahoo Finance
     ticker = initials  # Replace with your desired ticker symbol
@@ -3349,6 +3608,7 @@ class Candlestick:
     # Print the analysis results
     print(analysis)
 
+# News Article Analysis Model, prototype 1
 class NewsAnalysis1: 
     # Function to scrape news articles from the internet
     def scrape_news(url):
@@ -3400,6 +3660,7 @@ class NewsAnalysis1:
         else:
             return 'The news article is not favourable to stock prices, hence it\'s not a good investment.'
 
+# News Article Analysis Model, prototype 2
 class NewsAnalysis2:
     # Preprocess the text data
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -3527,6 +3788,7 @@ class NewsAnalysis2:
         accuracy = total_correct / len(data_loader.dataset)
         print(f'Epoch {epoch+1}, Accuracy: {accuracy:.4f}')
 
+# Sentiment Database for Target Company Social Media posts
 class SentimentDataset:
     def __init__(self, text, labels, tokenizer, max_len):
         self.text = text
@@ -3569,6 +3831,7 @@ class SentimentDataset:
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
+# Sentiment analysis model for Target Company Social Media posts
 class SentimentAnalysisModel:
     def __init__(self, bert_model):
         super(SentimentAnalysisModel, self).__init__()
@@ -3633,6 +3896,7 @@ class SentimentAnalysisModel:
     print(f'Val Classification Report:\n{classification_report(y_true, y_pred)}')
     print(f'Val Confusion Matrix:\n{confusion_matrix(y_true, y_pred)}')
 
+# Preprocess and Analyze collected Stock data
 class StockDataset:
     def __init__(self, data, tokenizer, max_len):
         self.data = data
@@ -3662,6 +3926,7 @@ class StockDataset:
             'label': torch.tensor(label, dtype=torch.long)
         }
 
+# MTM to coordinate AI tasks
 class MultiTaskModel:
     def __init__(self, lstm_model, bert_model):
         super(MultiTaskModel, self).__init__()
@@ -3730,6 +3995,7 @@ class MultiTaskModel:
 
         print(f'Epoch {epoch+1}, Loss: {loss.item()}')
 
+# Credit Risk Analysis model to generate fees for consultation
 class CreditRiskAnalysis:
     def risk_tolerance_chat():
         print("Hey there! Let's chat a bit about investing. Nothing too serious, just friends talking about goals!")
@@ -3787,258 +4053,7 @@ class CreditRiskAnalysis:
         print(f"\nThanks for the chat! Based on our talk, it seems you're a {risk_category}.")
         print("Remember, this is just a starting point. The world of Finance opens its arms for you, and FinVision is here to greet you at the door!")
 
-class PersonalityTest:
-    from abc import ABC, abstractmethod
-    from enum import Enum
-
-    class NetWorth(Enum):
-        UNDER_100K = 1
-        ONE_HUNDRED_TO_FIVE_HUNDRED_K = 2
-        OVER_FIVE_HUNDRED_K = 3
-
-    class IncomeLevel(Enum):
-        UNDER_50K = 1
-        FIFTY_TO_100K = 2
-        OVER_100K = 3
-
-    class AgeGroup(Enum):
-        UNDER_30 = 1
-        THIRTY_TO_FIFTY = 2
-        OVER_FIFTY = 3
-
-    class InvestmentExperience(Enum):
-        BEGINNER = 1
-        INTERMEDIATE = 2
-        ADVANCED = 3
-
-    class FinancialGoal(Enum):
-        RETIREMENT = 1
-        WEALTH_ACCUMULATION = 2
-        INCOME_GENERATION = 3
-
-    class InvestmentStyle(Enum):
-        CONSERVATIVE = 1
-        MODERATE = 2
-        AGGRESSIVE = 3
-
-    class InvestmentHorizon(Enum):
-        SHORT_TERM = 1
-        MEDIUM_TERM = 2
-        LONG_TERM = 3
-
-    class RiskTolerance(Enum):
-        LOW = 1
-        MEDIUM = 2
-        HIGH = 3
-
-    class Occupation(Enum):
-        STUDENT = 1
-        WORKING_PROFESSIONAL = 2
-        BUSINESS_OWNER = 3
-
-    class Education(Enum):
-        HIGH_SCHOOL = 1
-        COLLEGE = 2
-        POSTGRADUATE = 3
-
-    class MaritalStatus(Enum):
-        SINGLE = 1
-        MARRIED = 2
-        DIVORCED = 3
-
-    class Dependents(Enum):
-        NONE = 1
-        ONE = 2
-        TWO_OR_MORE = 3
-
-    class MultipleChoiceQuestion:
-        def __init__(self, category, weight, question, options):
-            self.category = category
-            self.weight = weight
-            self.question = question
-            self.options = options
-
-    class InvestmentProfile:
-        def __init__(self, style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents):
-            self.style = style
-            self.horizon = horizon
-            self.tolerance = tolerance
-            self.goal = goal
-            self.experience = experience
-            self.age = age
-            self.income = income
-            self.net_worth = net_worth
-            self.occupation = occupation
-            self.education = education
-            self.marital_status = marital_status
-            self.dependents = dependents
-
-    class Question(ABC):
-        def __init__(self, category, weight):
-            self.category = category
-            self.weight = weight
-            self.options = []
-
-        def ask(self):
-            pass
-    class InvestingPersonalityTest:
-        def __init__(self):
-            self.questions = [
-                MultipleChoiceQuestion("Risk Tolerance", 2, "How much risk are you willing to take?", ["Very little", "Some", "A lot"]),
-                MultipleChoiceQuestion("Investment Horizon", 3, "What is your investment time frame?", ["Less than 1 year", "1-5 years", "More than 5 years"]),
-                MultipleChoiceQuestion("Investment Style", 2, "What is your investment goal?", ["Preserve capital", "Generate income", "Grow wealth"]),
-                MultipleChoiceQuestion("Financial Goal", 2, "What is your financial goal?", ["Retirement", "Wealth accumulation", "Income generation"]),
-                MultipleChoiceQuestion("Investment Experience", 1, "What is your investment experience?", ["Beginner", "Intermediate", "Advanced"]),
-                MultipleChoiceQuestion("Age", 1, "What is your age?", ["Under 30", "30-50", "Over 50"]),
-                MultipleChoiceQuestion("Income", 1, "What is your annual income?", ["Less than $50,000", "$50,000-$100,000", "More than $100,000"]),
-                MultipleChoiceQuestion("Net Worth", 1, "What is your net worth?", ["Less than $100,000", "$100,000-$500,000", "More than $500,000"]),
-                MultipleChoiceQuestion("Occupation", 1, "What is your occupation?", ["Student", "Working professional", "Business owner"]),
-                MultipleChoiceQuestion("Education", 1, "What is your education level?", ["High school", "College", "Postgraduate"]),
-                MultipleChoiceQuestion("Marital Status", 1, "What is your marital status?", ["Single", "Married", "Divorced"]),
-                MultipleChoiceQuestion("Dependents", 1, "How many dependents do you have?", ["None", "One", "Two or more"]),
-                # Add more questions here
-            ]
-
-        def administer_test(self):
-            answers = {}
-            for question in self.questions:
-                answer = input(question.question + " ")
-                answers[question.category] = answer
-            return answers
-
-        def calculate_profile(self, answers):
-            style= self.calculate_investment_style(answers)
-            horizon = self.calculate_investment_horizon(answers)
-            tolerance = self.calculate_risk_tolerance(answers)
-            goal = self.calculate_financial_goal(answers)
-            experience = self.calculate_investment_experience(answers)
-            age = self.calculate_age(answers)
-            income = self.calculate_income(answers)
-            net_worth = self.calculate_net_worth(answers)
-            occupation = self.calculate_occupation(answers)
-            education = self.calculate_education(answers)
-            marital_status = self.calculate_marital_status(answers)
-            dependents = self.calculate_dependents(answers)
-
-            return InvestmentProfile(style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents)
-
-        def calculate_investment_style(self, answers):
-            if answers["Investment Style"] == "Preserve capital":
-                return InvestmentStyle.CONSERVATIVE
-            elif answers["Investment Style"] == "Generate income":
-                return InvestmentStyle.MODERATE
-            else:
-                return InvestmentStyle.AGGRESSIVE
-
-        def calculate_investment_horizon(self, answers):
-            if answers["Investment Horizon"] == "Less than 1 year":
-                return InvestmentHorizon.SHORT_TERM
-            elif answers["Investment Horizon"] == "1-5 years":
-                return InvestmentHorizon.MEDIUM_TERM
-            else:
-                return InvestmentHorizon.LONG_TERM
-
-        def calculate_risk_tolerance(self, answers):
-            if answers["Risk Tolerance"] == "Very little":
-                return RiskTolerance.LOW
-            elif answers["Risk Tolerance"] == "Some":
-                return RiskTolerance.MEDIUM
-            else:
-                return RiskTolerance.HIGH
-
-        def calculate_financial_goal(self, answers):
-            if answers["Financial Goal"] == "Retirement":
-                return FinancialGoal.RETIREMENT
-            elif answers["Financial Goal"] == "Wealth accumulation":
-                return FinancialGoal.WEALTH_ACCUMULATION
-            else:
-                return FinancialGoal.INCOME_GENERATION
-
-        def calculate_investment_experience(self, answers):
-            if answers["Investment Experience"] == "Beginner":
-                return InvestmentExperience.BEGINNER
-            elif answers["Investment Experience"] == "Intermediate":
-                return InvestmentExperience.INTERMEDIATE
-            else:
-                return InvestmentExperience.ADVANCED
-
-        def calculate_age(self, answers):
-            if answers["Age"] == "Under 30":
-                return AgeGroup.UNDER_30
-            elif answers["Age"] == "30-50":
-                return AgeGroup.THIRTY_TO_FIFTY
-            else:
-                return AgeGroup.OVER_FIFTY
-
-        def calculate_income(self, answers):
-            if answers["Income"] == "Less than $50,000":
-                return IncomeLevel.UNDER_50K
-            elif answers["Income"] == "$50,000-$100,000":
-                return IncomeLevel.FIFTY_TO_100K
-            else:
-                return IncomeLevel.OVER_100K
-
-        def calculate_net_worth(self, answers):
-            if answers["Net Worth"] == "Less than $100,000":
-                return NetWorth.UNDER_100K
-            elif answers["Net Worth"] == "$100,000-$500,000":
-                return NetWorth.ONE_HUNDRED_TO_FIVE_HUNDRED_K
-            else:
-                return NetWorth.OVER_FIVE_HUNDRED_K
-
-        def calculate_occupation(self, answers):
-            if answers["Occupation"] == "Student":
-                return Occupation.STUDENT
-            elif answers["Occupation"] == "Working professional":
-                return Occupation.WORKING_PROFESSIONAL
-            else:
-                return Occupation.BUSINESS_OWNER
-
-        def calculate_education(self, answers):
-            if answers["Education"] == "High school":
-                return Education.HIGH_SCHOOL
-            elif answers["Education"] == "College":
-                return Education.COLLEGE
-            else:
-                return Education.POSTGRADUATE
-
-        def calculate_marital_status(self, answers):
-            if answers["Marital Status"] == "Single":
-                return MaritalStatus.SINGLE
-            elif answers["Marital Status"] == "Married":
-                return MaritalStatus.MARRIED
-            else:
-                return MaritalStatus.DIVORCED
-
-        def calculate_dependents(self, answers):
-            if answers["Dependents"] == "None":
-                return Dependents.NONE
-            elif answers["Dependents"] == "One":
-                return Dependents.ONE
-            else:
-                return Dependents.TWO_OR_MORE
-
-        def main():
-            test = InvestingPersonalityTest()
-            answers = test.administer_test()
-            profile = test.calculate_profile(answers)
-            print("Your investment profile is:")
-            print("Investment Style:", profile.style)
-            print("Investment Horizon:", profile.horizon)
-            print("Risk Tolerance:", profile.tolerance)
-            print("Financial Goal:", profile.goal)
-            print("Investment Experience:", profile.experience)
-            print("Age:", profile.age)
-            print("Income:", profile.income)
-            print("Net Worth:", profile.net_worth)
-            print("Occupation:", profile.occupation)
-            print("Education:", profile.education)
-            print("Marital Status:", profile.marital_status)
-            print("Dependents:", profile.dependents)
-
-        if __name__ == "__main__":
-            main()
-            
+# More advanced Stock price predictor, unidimensional
 class StockPricePredictor:
     def __init__(self, data, seq_len, batch_size, epochs, exog_vars, num_steps_ahead, num_stocks):
         self.data = data
@@ -4128,6 +4143,7 @@ class StockPricePredictor:
         ga.optimize()
         return ga.best_solution
 
+# Basic Rolling Average model to predict stockprices influenced unidimensionally
 class ARIMAtrain:
     # Load your dataset (replace with your own data)
     df = pd.read_csv('prices.csv', index_col='date', parse_dates=['date'])
@@ -4186,6 +4202,7 @@ class ARIMAtrain:
     mse = mean_squared_error(test, model_fit.forecast(steps=len(test)))
     print(f'Mean Squared Error: {mse:.2f}')
 
+# AI-empowered SWOT analysis model
 class SWOTanalysis:
     # Create a DataFrame from the SWOT data
     swot_df = pd.DataFrame(swot_data)
