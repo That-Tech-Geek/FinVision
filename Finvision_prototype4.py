@@ -2708,12 +2708,22 @@ class AIValidation:
 
     def validate_sector(self):
         sector_map = {
-            "Technology": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
-            "Finance": {"style": ["Conservative", "Risk-averse"], "horizon": ["Short-term", "Medium-term"]},
-            "Healthcare": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
-            "Energy": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
-            "Consumer Goods": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]}
-        }
+                    "Technology": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
+                    "Finance": {"style": ["Conservative", "Risk-averse"], "horizon": ["Short-term", "Medium-term"]},
+                    "Healthcare": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Energy": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
+                    "Consumer Goods": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Commodities": {"style": ["Aggressive", "Speculative"], "horizon": ["Short-term", "Medium-term"]},
+                    "Consumer Discretionary": {"style": ["Moderate", "Growth-oriented"], "horizon": ["Medium-term", "Long-term"]},
+                    "Fast-Moving Consumer Goods": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Financial Services": {"style": ["Conservative", "Risk-averse"], "horizon": ["Short-term", "Medium-term"]},
+                    "Industrials": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Information Technology": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
+                    "Services": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Telecommunication": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+                    "Utilities": {"style": ["Conservative", "Defensive"], "horizon": ["Long-term", "Short-term"]},
+                    "Others": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]}
+                }
         if self.company_sector in sector_map:
             sector_traits = sector_map[self.company_sector]
             if self.user_profile.style.name in sector_traits["style"] and self.user_profile.horizon.name in sector_traits["horizon"]:
@@ -4249,6 +4259,356 @@ class SWOTanalysis:
     plt.table(cellText=swot_df.values, colLabels=swot_df.columns, loc='center')
     plt.title('SWOT Analysis')
     plt.show()
+
+# Develop Competitive Pricing Model
+
+    def __init__(self, user_profile, company_sector, company_data, market_data, economic_data, industry_data, competitor_data, macroeconomic_data, customer_data, product_data, sales_data, marketing_data):
+        self.user_profile = user_profile
+        self.company_sector = company_sector
+        self.company_data = company_data
+        self.market_data = market_data
+        self.economic_data = economic_data
+        self.industry_data = industry_data
+        self.competitor_data = competitor_data
+        self.macroeconomic_data = macroeconomic_data
+        self.customer_data = customer_data
+        self.product_data = product_data
+        self.sales_data = sales_data
+        self.marketing_data = marketing_data
+
+    def calculate_risk_score(self):
+        risk_score = 0
+        if self.user_profile.style.name == "Aggressive":
+            risk_score += 5
+        elif self.user_profile.style.name == "Growth-oriented":
+            risk_score += 4.5
+        elif self.user_profile.style.name == "Moderate":
+            risk_score += 4
+        elif self.user_profile.style.name == "Conservative":
+            risk_score += 3.5
+        elif self.user_profile.style.name == "Risk-averse":
+            risk_score += 3
+
+        if self.user_profile.horizon.name == "Long-term":
+            risk_score += 4
+        elif self.user_profile.horizon.name == "Medium-term":
+            risk_score += 3.5
+        elif self.user_profile.horizon.name == "Short-term":
+            risk_score += 3
+
+        if self.company_sector in ["Technology", "Energy"]:
+            risk_score += 4
+        elif self.company_sector in ["Finance", "Healthcare"]:
+            risk_score += 3.5
+        elif self.company_sector in ["Consumer Goods"]:
+            risk_score += 3
+
+        if self.company_data["revenue_growth"] > 30:
+            risk_score += 4
+        elif self.company_data["revenue_growth"] > 25:
+            risk_score += 3.5
+        elif self.company_data["revenue_growth"] < 20:
+            risk_score -= 2
+
+        if self.company_data["profit_margin"] > 25:
+            risk_score += 4
+        elif self.company_data["profit_margin"] > 20:
+            risk_score += 3.5
+        elif self.company_data["profit_margin"] < 15:
+            risk_score -= 2
+
+        if self.market_data["market_volatility"] > 30:
+            risk_score += 4
+        elif self.market_data["market_volatility"] > 25:
+            risk_score += 3.5
+        elif self.market_data["market_volatility"] < 20:
+            risk_score -= 2
+
+        if self.economic_data["GDP_growth"] > 5:
+            risk_score += 3
+        elif self.economic_data["GDP_growth"] > 4:
+            risk_score += 2.5
+        elif self.economic_data["GDP_growth"] < 3:
+            risk_score -= 2
+
+        if self.economic_data["inflation_rate"] > 5:
+            risk_score += 3
+        elif self.economic_data["inflation_rate"] > 4:
+            risk_score += 2.5
+        elif self.economic_data["inflation_rate"] < 3:
+            risk_score -= 2
+
+        if self.industry_data["industry_growth"] > 15:
+            risk_score += 3
+        elif self.industry_data["industry_growth"] > 10:
+            risk_score += 2.5
+        elif self.industry_data["industry_growth"] < 5:
+            risk_score -= 2
+
+        if self.competitor_data["competitor_strength"] > 0.8:
+            risk_score += 3
+        elif self.competitor_data["competitor_strength"] > 0.6:
+            risk_score += 2.5
+        elif self.competitor_data["competitor_strength"] < 0.4:
+            risk_score -= 2
+
+        if self.macroeconomic_data["unemployment_rate"] < 4:
+            risk_score += 2
+        elif self.macroeconomic_data["unemployment_rate"] < 5:
+            risk_score += 1.5
+        elif self.macroeconomic_data["unemployment_rate"] > 6:
+            risk_score -= 2
+
+        if self.customer_data["customer_satisfaction"] > 0.8:
+            risk_score += 2
+        elif self.customer_data["customer_satisfaction"] > 0.6:
+            risk_score += 1.5
+        elif self.customer_data["customer_satisfaction"] < 0.4:
+            risk_score -= 2
+
+        if self.product_data["product_quality"] > 0.8:
+            risk_score += 2
+        elif self.product_data["product_quality"] > 0.6:
+            risk_score += 1.5
+        elif self.product_data["product_quality"] < 0.4:
+            risk_score -= 2
+
+        if self.sales_data["sales_growth"] > 20:
+            risk_score += 2
+        elif self.sales_data["sales_growth"] > 15:
+            risk_score += 1.5
+        elif self.sales_data["sales_growth"] < 10:
+            risk_score -= 2
+
+        if self.marketing_data["marketing_efficiency"] > 0.8:
+            risk_score += 2
+        elif self.marketing_data["marketing_efficiency"] > 0.6:
+            risk_score += 1.5
+        elif self.marketing_data["marketing_efficiency"] < 0.4:
+            risk_score -= 2
+
+        return risk_score
+
+    def calculate_premium(self):
+        risk_score = self.calculate_risk_score()
+        if risk_score < 15:
+            return 0.005
+        elif risk_score < 20:
+            return 0.01
+        elif risk_score < 25:
+            return 0.015
+        elif risk_score < 30:
+            return 0.02
+        else:
+            return 0.025
+
+    def calculate_price(self, base_price):
+        premium = self.calculate_premium()
+        return base_price * (1 + premium)
+
+    class UserProfile:
+        def __init__(self, style, horizon):
+            self.style = style
+            self.horizon = horizon
+
+    class CompanyData:
+        def __init__(self, revenue_growth, profit_margin):
+            self.revenue_growth = revenue_growth
+            self.profit_margin = profit_margin
+
+    class MarketData:
+        def __init__(self, market_volatility):
+            self.market_volatility = market_volatility
+
+    class EconomicData:
+        def __init__(self, GDP_growth, inflation_rate):
+            self.GDP_growth = GDP_growth
+            self.inflation_rate = inflation_rate
+
+    class IndustryData:
+        def __init__(self, industry_growth):
+            self.industry_growth = industry_growth
+
+    class CompetitorData:
+        def __init__(self, competitor_strength):
+            self.competitor_strength = competitor_strength
+
+    class MacroeconomicData:
+        def __init__(self, unemployment_rate):
+            self.unemployment_rate = unemployment_rate
+
+    class CustomerData:
+        def __init__(self, customer_satisfaction):
+            self.customer_satisfaction = customer_satisfaction
+
+    class ProductData:
+        def __init__(self, product_quality):
+            self.product_quality = product_quality
+
+    class SalesData:
+        def __init__(self, sales_growth):
+            self.sales_growth = sales_growth
+
+    class MarketingData:
+    def __init__(self, marketing_efficiency):
+        self.marketing_efficiency = marketing_efficiency
+
+# Develop Competitive Pricing Model for consultation to be paid buy UPI
+class AdvancedCompetitivePricingModel:
+    def __init__(self, user_profile, company_sector, company_data, market_data, economic_data, industry_data, competitor_data, macroeconomic_data, customer_data, product_data, sales_data, marketing_data):
+        self.user_profile = user_profile
+        self.company_sector = company_sector
+        self.company_data = company_data
+        self.market_data = market_data
+        self.economic_data = economic_data
+        self.industry_data = industry_data
+        self.competitor_data = competitor_data
+        self.macroeconomic_data = macroeconomic_data
+        self.customer_data = customer_data
+        self.product_data = product_data
+        self.sales_data = sales_data
+        self.marketing_data = marketing_data
+
+    def calculate_risk_score(self):
+        risk_score = 0
+        if self.user_profile.style.name == "Aggressive":
+            risk_score += 5
+        elif self.user_profile.style.name == "Growth-oriented":
+            risk_score += 4.5
+        elif self.user_profile.style.name == "Moderate":
+            risk_score += 4
+        elif self.user_profile.style.name == "Conservative":
+            risk_score += 3.5
+        elif self.user_profile.style.name == "Risk-averse":
+            risk_score += 3
+
+        if self.user_profile.horizon.name == "Long-term":
+            risk_score += 4
+        elif self.user_profile.horizon.name == "Medium-term":
+            risk_score += 3.5
+        elif self.user_profile.horizon.name == "Short-term":
+            risk_score += 3
+
+        if self.company_sector in ["Technology", "Energy"]:
+            risk_score += 4
+        elif self.company_sector in ["Finance", "Healthcare"]:
+            risk_score += 3.5
+        elif self.company_sector in ["Consumer Goods"]:
+            risk_score += 3
+
+        if self.company_data.revenue_growth > 30:
+            risk_score += 4
+        elif self.company_data.revenue_growth > 25:
+            risk_score += 3.5
+        elif self.company_data.revenue_growth < 20:
+            risk_score -= 2
+
+        if self.company_data.profit_margin > 25:
+            risk_score += 4
+        elif self.company_data.profit_margin > 20:
+            risk_score += 3.5
+        elif self.company_data.profit_margin < 15:
+            risk_score -= 2
+
+        if self.market_data.market_volatility > 30:
+            risk_score += 4
+        elif self.market_data.market_volatility > 25:
+            risk_score += 3.5
+        elif self.market_data.market_volatility < 20:
+            risk_score -= 2
+
+        if self.economic_data.GDP_growth > 5:
+            risk_score += 3
+        elif self.economic_data.GDP_growth > 4:
+            risk_score += 2.5
+        elif self.economic_data.GDP_growth < 3:
+            risk_score -= 2
+
+        if self.economic_data.inflation_rate > 5:
+            risk_score += 3
+        elif self.economic_data.inflation_rate > 4:
+            risk_score += 2.5
+        elif self.economic_data.inflation_rate < 3:
+            risk_score -= 2
+
+        if self.industry_data.industry_growth > 15:
+            risk_score += 3
+        elif self.industry_data.industry_growth > 10:
+            risk_score += 2.5
+        elif self.industry_data.industry_growth < 5:
+            risk_score -= 2
+
+        if self.competitor_data.competitor_strength > 0.8:
+            risk_score += 3
+        elif self.competitor_data.competitor_strength > 0.6:
+            risk_score += 2.5
+        elif self.competitor_data.competitor_strength < 0.4:
+            risk_score -= 2
+
+        if self.macroeconomic_data.unemployment_rate < 4:
+            risk_score += 2
+        elif self.macroeconomic_data.unemployment_rate < 5:
+            risk_score += 1.5
+        elif self.macroeconomic_data.unemployment_rate > 6:
+            risk_score -= 2
+
+        if self.customer_data.customer_satisfaction > 0.8:
+            risk_score += 2
+        elif self.customer_data.customer_satisfaction > 0.6:
+            risk_score += 1.5
+        elif self.customer_data.customer_satisfaction < 0.4:
+            risk_score -= 2
+
+        if self.product_data.product_quality > 0.8:
+            risk_score += 2
+        elif self.product_data.product_quality > 0.6:
+            risk_score += 1.5
+        elif self.product_data.product_quality < 0.4:
+            risk_score -= 2
+
+        if self.sales_data.sales_growth > 20:
+            risk_score += 2
+        elif self.sales_data.sales_growth > 15:
+            risk_score += 1.5
+        elif self.sales_data.sales_growth < 10:
+            risk_score -= 2
+
+        if self.marketing_data.marketing_efficiency > 0.8:
+            risk_score += 2
+        elif self.marketing_data.marketing_efficiency > 0.6:
+            risk_score += 1.5
+        elif self.marketing_data.marketing_efficiency < 0.4:
+            risk_score -= 2
+
+        return risk_score
+
+    def calculate_premium(self):
+        risk_score = self.calculate_risk_score()
+        if risk_score < 15:
+            return 0.005
+        elif risk_score < 20:
+            return 0.01
+        elif risk_score < 25:
+            return 0.015
+        elif risk_score < 30:
+            return 0.02
+        else:
+            return 0.025
+
+    def calculate_price(self, base_price):
+        premium = self.calculate_premium()
+        return base_price * (1 + premium)
+
+    def generate_qr_code(self, amount, upi_id):
+        qr_data = f"upi://sambit1912@oksbi?pn=Sambit%20Mishra&am={amount}&cu=INR"
+        img = qrcode.make(qr_data)
+        img.save("qr_code.png")
+
+        model = AdvancedCompetitivePricingModel(user_profile, "Technology", company_data, market_data, economic_data, industry_data, competitor_data, macroeconomic_data, customer_data, product_data, sales_data, marketing_data)
+        base_price = 1000
+        amount = model.calculate_price(base_price)
+        upi_id = "sambit1912@oksbi"
+        model.generate_qr_code(amount, upi_id)
 
 class to_do:
     #develop as backend
