@@ -46,6 +46,11 @@ class Imports:
     import pandas as pd
     from torch.utils.data import Dataset, DataLoader
     import networkx as nx
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score
+    from sklearn.decomposition import PCA
 
 # Create NSE Directory of 2384 Companies
 class NSEcorp:
@@ -2756,6 +2761,7 @@ class AIValidation:
         else:
             return False
 
+# Accomodate Legal Restrictions and maintain own data base for each company. Sure, it's too much data but what can we do?
 # Call AI to search for all companies
 class AIsearch:
     def search_company(initials):
@@ -4227,6 +4233,44 @@ class ARIMAtrain:
     mse = mean_squared_error(test, model_fit.forecast(steps=len(test)))
     print(f'Mean Squared Error: {mse:.2f}')
 
+# Check for algorithmic biases
+class BiasDetect:
+    def eliminate_algorithmic_biases(X, y):
+        # Look-Ahead Bias
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        
+        # Optimization Bias
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_test_scaled)
+        accuracy = accuracy_score(y_test, y_pred)
+        print(f'Accuracy: {accuracy:.2f}')
+        
+        # Selection Bias
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X)
+        print(X_pca.head())
+        
+        # Confirmation Bias
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_pca, y)
+        y_pred = model.predict(X_pca)
+        accuracy = accuracy_score(y, y_pred)
+        print(f'Accuracy: {accuracy:.2f}')
+        
+        # Other Biases
+        X_augmented = pd.concat([X, pd.get_dummies(X, columns=['category'])], axis=1)
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_augmented, y)
+        y_pred = model.predict(X_augmented)
+        accuracy = accuracy_score(y, y_pred)
+        print(f'Accuracy: {accuracy:.2f}')
+        
+        return X_train_scaled, X_test_scaled, y_train, y_test
+
 # AI-empowered SWOT analysis model
 class SWOTanalysis:
     # Create a DataFrame from the SWOT data
@@ -4453,7 +4497,7 @@ class SWOTanalysis:
     def __init__(self, marketing_efficiency):
         self.marketing_efficiency = marketing_efficiency
 
-# Develop Competitive Pricing Model for consultation to be paid buy UPI
+# Develop Competitive Pricing Model for consultation to be paid by UPI
 class AdvancedCompetitivePricingModel:
     def __init__(self, user_profile, company_sector, company_data, market_data, economic_data, industry_data, competitor_data, macroeconomic_data, customer_data, product_data, sales_data, marketing_data):
         self.user_profile = user_profile
