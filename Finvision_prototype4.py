@@ -1,7 +1,6 @@
 # Import Necessary Libraries for Program
 class Imports:
     from bs4 import BeautifulSoup
-    import pandas as pd
     from newspaper import Article
     import numpy as np
     from scipy.stats import linregress
@@ -45,6 +44,8 @@ class Imports:
     from sklearn.preprocessing import LabelEncoder
     import matplotlib.pyplot as plt
     import pandas as pd
+    from torch.utils.data import Dataset, DataLoader
+    import networkx as nx
 
 # Create NSE Directory of 2384 Companies
 class NSEcorp:
@@ -3609,10 +3610,19 @@ class Candlestick:
     # Print the analysis results
     print(analysis)
 
-# News Article Analysis Model, prototype 1
-class NewsAnalysis1: 
-    # Function to scrape news articles from the internet
-    def scrape_news(url):
+# News Article Analysis Model
+class NewsAnalysisModel:
+    def __init__(self, company_name):
+        self.company_name = company_name
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english'))
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.bert_model = BertModel.from_pretrained('bert-base-uncased')
+        self.gcn_model = GCNModel(hidden_dim=128)
+        self.hierarchical_attention_model = HierarchicalAttentionModel(hidden_dim=128)
+        self.sentiment_analysis_model = SentimentAnalysisModel(self.bert_model, self.gcn_model, self.hierarchical_attention_model)
+
+    def scrape_news(self, url):
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
         article_text = ''
@@ -3620,90 +3630,98 @@ class NewsAnalysis1:
             article_text += paragraph.text
         return article_text
 
-    # Function to preprocess the news article text
-    def preprocess_text(text):
+    def preprocess_text(self, text):
         tokens = word_tokenize(text)
         tokens = [token for token in tokens if token.isalpha()]
-        tokens = [lemmatizer.lemmatize(token) for token in tokens]
-        tokens = [token for token in tokens if token not in stop_words]
+        tokens = [self.lemmatizer.lemmatize(token) for token in tokens]
+        tokens = [token for token in tokens if token not in self.stop_words]
         return '.join(tokens)'
 
-    # Search for news articles related to the company
-    search_url = f'https://www.google.com/search?q={Company_Name}+news'
-    response = requests.get(search_url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    news_articles = []
-    for result in soup.find_all('div', class_='rc'):
-        article_url = result.find('a')['href']
-        article_text = scrape_news(article_url)
-        news_articles.append((article_url, article_text))
+    def search_for_news_articles(self):
+        search_url = f'https://www.google.com/search?q={self.company_name}+news'
+        response = requests.get(search_url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_articles = []
+        for result in soup.find_all('div', class_='rc'):
+            article_url = result.find('a')['href']
+            article_text = self.scrape_news(article_url)
+            news_articles.append((article_url, article_text))
+        return news_articles
 
-    # Preprocess the news article text
-    lemmatizer = WordNetLemmatizer()
-    stop_words = set(stopwords.words('english'))
-    preprocessed_articles = [(url, preprocess_text(text)) for url, text in news_articles]
+    def create_dataset(self, news_articles):
+        dataset = []
+        for url, text in news_articles:
+            preprocessed_text = self.preprocess_text(text)
+            input_ids = self.tokenizer.encode(preprocessed_text, add_special_tokens=True, max_length=512, padding='max_length', truncation=True)
+            attention_mask = self.tokenizer.encode(preprocessed_text, add_special_tokens=True, max_length=512, padding='max_length', truncation=True)
+            label = 1  # assume all articles are favourable to stock prices
+            company = self.company_name
+            dataset.append((input_ids, attention_mask, label, company))
+        return dataset
 
-    # Create a TF-IDF vectorizer
-    vectorizer = TfidfVectorizer()
-    tfidf_vectors = vectorizer.fit_transform([text for _, text in preprocessed_articles])
+    def train_model(self, dataset):
+        data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(self.sentiment_analysis_model.parameters(), lr=1e-5)
+        for epoch in range(5):
+            self.sentiment_analysis_model.train()
+            total_loss = 0
+            for batch in data_loader:
+                input_ids, attention_mask, labels = batch
+                input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
+                optimizer.zero_grad()
+                outputs = self.sentiment_analysis_model(input_ids, attention_mask=attention_mask, company=labels)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+            print(f'Epoch {epoch+1}, Loss: {total_loss / len(data_loader)}')
+            self.sentiment_analysis_model.eval()
+            total_correct = 0
+            with torch.no_grad():
+                for batch in data_loader:
+                    input_ids, attention_mask, labels = batch
+                    input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
+                    outputs = self.sentiment_analysis_model(input_ids, attention_mask=attention_mask, company=labels)
+                    _, predicted = torch.max(outputs, 1)
+                    total_correct += (predicted == labels).sum().item()
+            accuracy = total_correct / len(data_loader.dataset)
+            print(f'Epoch {epoch+1}, Accuracy: {accuracy:.4f}')
 
-    # Train a Multinomial Naive Bayes model
-    model = MultinomialNB()
-    model.fit(tfidf_vectors, [1] * len(preprocessed_articles))  # assume all articles are favourable to stock prices
-
-    # Use the model to predict the sentiment of new news articles
-    def predict_sentiment(article_text):
-        preprocessed_text = preprocess_text(article_text)
-        tfidf_vector = vectorizer.transform([preprocessed_text])
-        sentiment = model.predict(tfidf_vector)[0]
-        if sentiment == 1:
+    def predict_sentiment(self, article_text):
+        preprocessed_text = self.preprocess_text(article_text)
+        input_ids = self.tokenizer.encode(preprocessed_text, add_special_tokens=True, max_length=512, padding='max_length', truncation=True)
+        attention_mask = self.tokenizer.encode(preprocessed_text, add_special_tokens=True, max_length=512, padding='max_length', truncation=True)
+        input_ids, attention_mask = input_ids.to(device), attention_mask.to(device)
+        outputs = self.sentiment_analysis_model(input_ids, attention_mask=attention_mask, company=self.company_name)
+        _, predicted = torch.max(outputs, 1)
+        if predicted == 1:
             return 'The news article is favourable to stock prices, hence it\'s a good investment.'
         else:
             return 'The news article is not favourable to stock prices, hence it\'s not a good investment.'
 
-# News Article Analysis Model, prototype 2
-class NewsAnalysis2:
-    # Preprocess the text data
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    data['input_ids'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True))
-    data['attention_mask'] = data['text'].apply(lambda x: tokenizer.encode(x, add_special_tokens=True, max_length=512, padding='max_length', truncation=True))
+    class GCNModel(nn.Module):
+        def __init__(self, hidden_dim):
+            super(GCNModel, self).__init__()
+            self.conv1 = GCNConv(hidden_dim, hidden_dim)
+            self.conv2 = GCNConv(hidden_dim, hidden_dim)
 
-    # Create a custom dataset class for our data
-    class SentimentDataset(torch.utils.data.Dataset):
-        def __init__(self, data, tokenizer):
-            self.data = data
-            self.tokenizer = tokenizer
+        def forward(self, data):
+            x, edge_index = data.x, data.edge_index
+            x = torch.relu(self.conv1(x, edge_index))
+            x = torch.relu(self.conv2(x, edge_index))
+            return x
 
-        def __len__(self):
-            return len(self.data)
+    class HierarchicalAttentionModel(nn.Module):
+        def __init__(self, hidden_dim):
+            super(HierarchicalAttentionModel, self).__init__()
+            self.attention = nn.MultiHeadAttention(hidden_dim, hidden_dim)
 
-        def __getitem__(self, idx):
-            text = self.data.iloc[idx, 0]
-            label = self.data.iloc[idx, 1]
-            company = self.data.iloc[idx, 2]
+        def forward(self, pooled_output, entity_representations):
+            attention_weights = self.attention(pooled_output, entity_representations)
+            sentence_representations = attention_weights * pooled_output
+            return sentence_representations
 
-            encoding = self.tokenizer.encode_plus(
-                text,
-                add_special_tokens=True,
-                max_length=512,
-                padding='max_length',
-                truncation=True,
-                return_attention_mask=True,
-                return_tensors='pt'
-            )
-
-            return {
-                'input_ids': encoding['input_ids'].flatten(),
-                'attention_mask': encoding['attention_mask'].flatten(),
-                'label': torch.tensor(label, dtype=torch.long),
-                'company': company
-            }
-
-    # Create a data loader for our dataset
-    dataset = SentimentDataset(data, tokenizer)
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-
-    # Define a custom model that combines BERT with a sentiment analysis head, a graph convolutional network, and hierarchical attention
     class SentimentAnalysisModel(nn.Module):
         def __init__(self, bert_model, gcn_model, hierarchical_attention_model):
             super(SentimentAnalysisModel, self).__init__()
@@ -3726,68 +3744,17 @@ class NewsAnalysis2:
             outputs = self.classifier(outputs)
             return outputs
 
-    # Load a pre-trained BERT model and fine-tune it for sentiment analysis
-    bert_model = BertModel.from_pretrained('bert-base-uncased')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # Define a graph convolutional network model
-    class GCNModel(nn.Module):
-        def __init__(self, hidden_dim):
-            super(GCNModel, self).__init__()
-            self.conv1 = GCNConv(hidden_dim, hidden_dim)
-            self.conv2 = GCNConv(hidden_dim, hidden_dim)
+    company_name = 'Apple'
+    news_analysis_model = NewsAnalysisModel(company_name)
+    news_articles = news_analysis_model.search_for_news_articles()
+    dataset = news_analysis_model.create_dataset(news_articles)
+    news_analysis_model.train_model(dataset)
 
-        def forward(self, data):
-            x, edge_index = data.x, data.edge_index
-            x = torch.relu(self.conv1(x, edge_index))
-            x = torch.relu(self.conv2(x, edge_index))
-            return x
-
-    gcn_model = GCNModel(hidden_dim=128)
-
-    # Define a hierarchical attention model
-    class HierarchicalAttentionModel(nn.Module):
-        def __init__(self, hidden_dim):
-            super(HierarchicalAttentionModel, self).__init__()
-            self.attention = nn.MultiHeadAttention(hidden_dim, hidden_dim)
-
-        def forward(self, pooled_output, entity_representations):
-            attention_weights = self.attention(pooled_output, entity_representations)
-            sentence_representations = attention_weights * pooled_output
-            return sentence_representations
-
-    hierarchical_attention_model = HierarchicalAttentionModel(hidden_dim=128)
-
-    # Create a sentiment analysis model that combines BERT with a sentiment analysis head, a graph convolutional network, and hierarchical attention
-    model = SentimentAnalysisModel(bert_model, gcn_model, hierarchical_attention_model)
-
-    # Train the model
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
-
-    for epoch in range(5):
-        model.train()
-        total_loss = 0
-        for batch in data_loader:
-            input_ids, attention_mask, labels = batch
-            input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(input_ids, attention_mask=attention_mask, company=labels)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        print(f'Epoch {epoch+1}, Loss: {total_loss / len(data_loader)}')
-        model.eval()
-        total_correct = 0
-        with torch.no_grad():
-            for batch in data_loader:
-                input_ids, attention_mask, labels = batch
-                input_ids, attention_mask, labels = input_ids.to(device), attention_mask.to(device), labels.to(device)
-                outputs = model(input_ids, attention_mask=attention_mask, company=labels)
-                _, predicted = torch.max(outputs, 1)
-                total_correct += (predicted == labels).sum().item()
-        accuracy = total_correct / len(data_loader.dataset)
-        print(f'Epoch {epoch+1}, Accuracy: {accuracy:.4f}')
+    # Test the model
+    article_text = 'Apple\'s new iPhone is a game-changer.'
+    print(news_analysis_model.predict_sentiment(article_text))
 
 # Sentiment Database for Target Company Social Media posts
 class SentimentDataset:
