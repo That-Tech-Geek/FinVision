@@ -2699,6 +2699,53 @@ class PersonalityTest:
         if __name__ == "__main__":
             main()
 
+# AI validates user preferences based on results from personality test
+class AIValidation:
+    def __init__(self, user_profile, company_sector, company_data):
+        self.user_profile = user_profile
+        self.company_sector = company_sector
+        self.company_data = company_data
+
+    def validate_sector(self):
+        sector_map = {
+            "Technology": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
+            "Finance": {"style": ["Conservative", "Risk-averse"], "horizon": ["Short-term", "Medium-term"]},
+            "Healthcare": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]},
+            "Energy": {"style": ["Aggressive", "Growth-oriented"], "horizon": ["Long-term", "Medium-term"]},
+            "Consumer Goods": {"style": ["Moderate", "Stable"], "horizon": ["Long-term", "Medium-term"]}
+        }
+        if self.company_sector in sector_map:
+            sector_traits = sector_map[self.company_sector]
+            if self.user_profile.style.name in sector_traits["style"] and self.user_profile.horizon.name in sector_traits["horizon"]:
+                return True
+            else:
+                print("Warning: The company sector does not align with your investment style and horizon.")
+                response = input("Do you want to override this warning? (yes/no): ")
+                if response.lower() == "yes":
+                    return True
+                else:
+                    return False
+        else:
+            print("Error: Unknown company sector.")
+            return False
+
+    def validate_company_data(self):
+        if self.company_data["revenue_growth"] > 10 and self.company_data["profit_margin"] > 5:
+            return True
+        else:
+            print("Warning: The company's revenue growth and profit margin are not satisfactory.")
+            response = input("Do you want to override this warning? (yes/no): ")
+            if response.lower() == "yes":
+                return True
+            else:
+                return False
+
+    def validate_investment(self):
+        if self.validate_sector() and self.validate_company_data():
+            return True
+        else:
+            return False
+
 # Call AI to search for all companies
 class AIsearch:
     def search_company(initials):
