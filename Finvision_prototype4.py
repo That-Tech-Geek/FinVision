@@ -3315,35 +3315,39 @@ class StockAnalysis:
         print("---------")
 
 class Candlestick:
-    def __init__(self, data: pd.DataFrame):
-        self.data = data
+    # Get financial data from Yahoo Finance
+    ticker = initials  # Replace with your desired ticker symbol
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    data = yf.download(ticker, start="2000-01-01", end="2022-02-26")
 
-    def plot(self, title: str = "Candlestick Chart", figsize: tuple = (12, 6)):
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.set_title(title)
-        plt.plot(self.data['Open'], label='Open')
-        plt.plot(self.data['High'], label='High')
-        plt.plot(self.data['Low'], label='Low')
-        plt.plot(self.data['Close'], label='Close')
-        plt.legend(loc='upper left')
-        plt.show()
+    # Convert data to pandas dataframe
+    df = pd.DataFrame(data)
 
-    def add_volume(self):
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-        ax1.set_title("Candlestick Chart with Volume")
-        ax1.plot(self.data['Open'], label='Open')
-        ax1.plot(self.data['High'], label='High')
-        ax1.plot(self.data['Low'], label='Low')
-        ax1.plot(self.data['Close'], label='Close')
-        ax1.legend(loc='upper left')
-        ax2.bar(self.data.index, self.data['Volume'])
-        ax2.set_ylabel('Volume')
-        plt.show()
+    # Create candlestick chart
+    fig, ax = plt.subplots()
+    ax.plot(df.index, df['Open'], label='Open')
+    ax.plot(df.index, df['High'], label='High')
+    ax.plot(df.index, df['Low'], label='Low')
+    ax.plot(df.index, df['Close'], label='Close')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Price')
+    ax.set_title(f'{ticker} Candlestick Chart')
+    ax.legend()
 
-    candlestick = Candlestick(data)
-    candlestick.plot()
-    candlestick.add_volume()
-    candlestick.save('candlestick_chart.png')
+    # Save chart to file
+    plt.savefig(f'{ticker}_candlestick_chart.png')
+
+    # Analyze chart using Gemini AI (assuming you have the Gemini AI library installed)
+    import gemini_ai
+
+    # Load the saved chart image
+    chart_image = plt.imread(f'{ticker}_candlestick_chart.png')
+
+    # Analyze the chart using Gemini AI
+    analysis = gemini_ai.analyze_chart(chart_image)
+
+    # Print the analysis results
+    print(analysis)
 
 class NewsAnalysis1: 
     # Function to scrape news articles from the internet
@@ -3726,38 +3730,315 @@ class MultiTaskModel:
 
         print(f'Epoch {epoch+1}, Loss: {loss.item()}')
 
-class SWOTanalysis:
-    # Create a DataFrame from the SWOT data
-    swot_df = pd.DataFrame(swot_data)
+class CreditRiskAnalysis:
+    def risk_tolerance_chat():
+        print("Hey there! Let's chat a bit about investing. Nothing too serious, just friends talking about goals!")
 
-    # Plot the SWOT analysis as a table
-    plt.figure(figsize=(10, 6))
-    plt.axis('tight')
-    plt.axis('off')
-    plt.grid(b=None)
-    plt.table(cellText=[strengths, weaknesses, opportunities, threats], colLabels=['SWOT Analysis'], loc='center')
-    plt.title('SWOT Analysis')
-    plt.show()
-    # Define the SWOT analysis data
-    swot_data = {
-        'Strengths': [input("Enter Strength 1: "), input("Enter Strength 2: "), input("Enter Strength 3: ")],
-        'Weaknesses': [input("Enter Weakness 1: "), input("Enter Weakness 2: "), input("Enter Weakness 3: ")],
-        'Opportunities': [input("Enter Opportunity 1: "), input("Enter Opportunity 2: "), input("Enter Opportunity 3: ")],
-        'Threats': [input("Enter Threat 1: "), input("Enter Threat 2: "), input("Enter Threat 3: ")]
-    }
+        # Investment Time Horizon
+        print("Imagine we win the lottery tomorrow. How long would you ideally wait before investing that money?")
+        time_horizon = int(input("Years (type a number, or type 'skip' if unsure): "))
+        if time_horizon <= 0:
+            time_horizon = 1  # Set minimum to 1 year
+            print("Totally get it, planning for the future is important no matter what timeframe. Let's put 1 year for now.")
 
-    # Create a DataFrame from the SWOT data
-    swot_df = pd.DataFrame(swot_data)
+        # Financial Goals
+        print("So, what are your investment dreams? Early retirement on a beach, funding a business idea, or something else entirely?")
+        goal_response = input("Tell me all about it! (or type 'skip' if you prefer to keep it private): ")
+        goal_score = 3  # Moderate risk by default
+        if "retire" in goal_response.lower():
+            goal_score = 5  # Aggressive goal = higher risk
+        elif "business" in goal_response.lower():
+            goal_score = 4  # Business can be risky, adjust score
 
-    # Plot the SWOT analysis as a table
-    plt.figure(figsize=(10, 6))
-    plt.axis('tight')
-    plt.axis('off')
-    plt.grid(b=None)
-    plt.table(cellText=swot_df.values, colLabels=swot_df.columns, loc='center')
-    plt.title('SWOT Analysis')
-    plt.show()
+        # Risk Aversion
+        print("Okay, now be honest, how do you feel when the stock market takes a dip? Do you panic a little, or just shrug it off?")
+        risk_response = input("Be real, no judgment here! (type 'skip' if you'd rather not answer): ")
+        risk_score = 3  # Moderate risk by default
+        if "panic" in risk_response.lower():
+            risk_score = 1  # Panic selling = lower risk tolerance
+        elif "shrug" in risk_response.lower():
+            risk_score = 5  # Comfortable with volatility = higher risk tolerance
 
+        # Financial Knowledge
+        print("Investing can seem complicated, but how comfortable do you feel navigating the financial world?")
+        knowledge_response = input("Newbie, savvy investor, or somewhere in between? (type 'skip' if you'd rather not say): ")
+        knowledge_score = 3  # Moderate knowledge by default
+        if "newbie" in knowledge_response.lower():
+            knowledge_score = 1  # Lower knowledge might suggest lower risk tolerance
+        elif "savvy" in knowledge_response.lower():
+            knowledge_score = 5  # More knowledge can open doors to higher risk strategies
+
+        # Calculate Risk Tolerance Score (replace with your weighting logic)
+        risk_tolerance_index = (time_horizon * 0.4) + goal_score + risk_score + (knowledge_score * 0.2)
+
+        # Translate Score to Risk Tolerance Category
+        risk_category = "Moderate Risk Taker"
+        if risk_tolerance_index <= 6:
+            risk_category = "Very Cautious Investor"
+        elif risk_tolerance_index <= 8:
+            risk_category = "Cautious Investor"
+        elif risk_tolerance_index <= 10:
+            risk_category = "Moderate Risk Taker"
+        elif risk_tolerance_index <= 12:
+            risk_category = "Growth-Oriented Investor"
+        else:
+            risk_category = "Aggressive Investor"
+
+        print(f"\nThanks for the chat! Based on our talk, it seems you're a {risk_category}.")
+        print("Remember, this is just a starting point. The world of Finance opens its arms for you, and FinVision is here to greet you at the door!")
+
+class PersonalityTest:
+    from abc import ABC, abstractmethod
+    from enum import Enum
+
+    class NetWorth(Enum):
+        UNDER_100K = 1
+        ONE_HUNDRED_TO_FIVE_HUNDRED_K = 2
+        OVER_FIVE_HUNDRED_K = 3
+
+    class IncomeLevel(Enum):
+        UNDER_50K = 1
+        FIFTY_TO_100K = 2
+        OVER_100K = 3
+
+    class AgeGroup(Enum):
+        UNDER_30 = 1
+        THIRTY_TO_FIFTY = 2
+        OVER_FIFTY = 3
+
+    class InvestmentExperience(Enum):
+        BEGINNER = 1
+        INTERMEDIATE = 2
+        ADVANCED = 3
+
+    class FinancialGoal(Enum):
+        RETIREMENT = 1
+        WEALTH_ACCUMULATION = 2
+        INCOME_GENERATION = 3
+
+    class InvestmentStyle(Enum):
+        CONSERVATIVE = 1
+        MODERATE = 2
+        AGGRESSIVE = 3
+
+    class InvestmentHorizon(Enum):
+        SHORT_TERM = 1
+        MEDIUM_TERM = 2
+        LONG_TERM = 3
+
+    class RiskTolerance(Enum):
+        LOW = 1
+        MEDIUM = 2
+        HIGH = 3
+
+    class Occupation(Enum):
+        STUDENT = 1
+        WORKING_PROFESSIONAL = 2
+        BUSINESS_OWNER = 3
+
+    class Education(Enum):
+        HIGH_SCHOOL = 1
+        COLLEGE = 2
+        POSTGRADUATE = 3
+
+    class MaritalStatus(Enum):
+        SINGLE = 1
+        MARRIED = 2
+        DIVORCED = 3
+
+    class Dependents(Enum):
+        NONE = 1
+        ONE = 2
+        TWO_OR_MORE = 3
+
+    class MultipleChoiceQuestion:
+        def __init__(self, category, weight, question, options):
+            self.category = category
+            self.weight = weight
+            self.question = question
+            self.options = options
+
+    class InvestmentProfile:
+        def __init__(self, style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents):
+            self.style = style
+            self.horizon = horizon
+            self.tolerance = tolerance
+            self.goal = goal
+            self.experience = experience
+            self.age = age
+            self.income = income
+            self.net_worth = net_worth
+            self.occupation = occupation
+            self.education = education
+            self.marital_status = marital_status
+            self.dependents = dependents
+
+    class Question(ABC):
+        def __init__(self, category, weight):
+            self.category = category
+            self.weight = weight
+            self.options = []
+
+        def ask(self):
+            pass
+    class InvestingPersonalityTest:
+        def __init__(self):
+            self.questions = [
+                MultipleChoiceQuestion("Risk Tolerance", 2, "How much risk are you willing to take?", ["Very little", "Some", "A lot"]),
+                MultipleChoiceQuestion("Investment Horizon", 3, "What is your investment time frame?", ["Less than 1 year", "1-5 years", "More than 5 years"]),
+                MultipleChoiceQuestion("Investment Style", 2, "What is your investment goal?", ["Preserve capital", "Generate income", "Grow wealth"]),
+                MultipleChoiceQuestion("Financial Goal", 2, "What is your financial goal?", ["Retirement", "Wealth accumulation", "Income generation"]),
+                MultipleChoiceQuestion("Investment Experience", 1, "What is your investment experience?", ["Beginner", "Intermediate", "Advanced"]),
+                MultipleChoiceQuestion("Age", 1, "What is your age?", ["Under 30", "30-50", "Over 50"]),
+                MultipleChoiceQuestion("Income", 1, "What is your annual income?", ["Less than $50,000", "$50,000-$100,000", "More than $100,000"]),
+                MultipleChoiceQuestion("Net Worth", 1, "What is your net worth?", ["Less than $100,000", "$100,000-$500,000", "More than $500,000"]),
+                MultipleChoiceQuestion("Occupation", 1, "What is your occupation?", ["Student", "Working professional", "Business owner"]),
+                MultipleChoiceQuestion("Education", 1, "What is your education level?", ["High school", "College", "Postgraduate"]),
+                MultipleChoiceQuestion("Marital Status", 1, "What is your marital status?", ["Single", "Married", "Divorced"]),
+                MultipleChoiceQuestion("Dependents", 1, "How many dependents do you have?", ["None", "One", "Two or more"]),
+                # Add more questions here
+            ]
+
+        def administer_test(self):
+            answers = {}
+            for question in self.questions:
+                answer = input(question.question + " ")
+                answers[question.category] = answer
+            return answers
+
+        def calculate_profile(self, answers):
+            style= self.calculate_investment_style(answers)
+            horizon = self.calculate_investment_horizon(answers)
+            tolerance = self.calculate_risk_tolerance(answers)
+            goal = self.calculate_financial_goal(answers)
+            experience = self.calculate_investment_experience(answers)
+            age = self.calculate_age(answers)
+            income = self.calculate_income(answers)
+            net_worth = self.calculate_net_worth(answers)
+            occupation = self.calculate_occupation(answers)
+            education = self.calculate_education(answers)
+            marital_status = self.calculate_marital_status(answers)
+            dependents = self.calculate_dependents(answers)
+
+            return InvestmentProfile(style, horizon, tolerance, goal, experience, age, income, net_worth, occupation, education, marital_status, dependents)
+
+        def calculate_investment_style(self, answers):
+            if answers["Investment Style"] == "Preserve capital":
+                return InvestmentStyle.CONSERVATIVE
+            elif answers["Investment Style"] == "Generate income":
+                return InvestmentStyle.MODERATE
+            else:
+                return InvestmentStyle.AGGRESSIVE
+
+        def calculate_investment_horizon(self, answers):
+            if answers["Investment Horizon"] == "Less than 1 year":
+                return InvestmentHorizon.SHORT_TERM
+            elif answers["Investment Horizon"] == "1-5 years":
+                return InvestmentHorizon.MEDIUM_TERM
+            else:
+                return InvestmentHorizon.LONG_TERM
+
+        def calculate_risk_tolerance(self, answers):
+            if answers["Risk Tolerance"] == "Very little":
+                return RiskTolerance.LOW
+            elif answers["Risk Tolerance"] == "Some":
+                return RiskTolerance.MEDIUM
+            else:
+                return RiskTolerance.HIGH
+
+        def calculate_financial_goal(self, answers):
+            if answers["Financial Goal"] == "Retirement":
+                return FinancialGoal.RETIREMENT
+            elif answers["Financial Goal"] == "Wealth accumulation":
+                return FinancialGoal.WEALTH_ACCUMULATION
+            else:
+                return FinancialGoal.INCOME_GENERATION
+
+        def calculate_investment_experience(self, answers):
+            if answers["Investment Experience"] == "Beginner":
+                return InvestmentExperience.BEGINNER
+            elif answers["Investment Experience"] == "Intermediate":
+                return InvestmentExperience.INTERMEDIATE
+            else:
+                return InvestmentExperience.ADVANCED
+
+        def calculate_age(self, answers):
+            if answers["Age"] == "Under 30":
+                return AgeGroup.UNDER_30
+            elif answers["Age"] == "30-50":
+                return AgeGroup.THIRTY_TO_FIFTY
+            else:
+                return AgeGroup.OVER_FIFTY
+
+        def calculate_income(self, answers):
+            if answers["Income"] == "Less than $50,000":
+                return IncomeLevel.UNDER_50K
+            elif answers["Income"] == "$50,000-$100,000":
+                return IncomeLevel.FIFTY_TO_100K
+            else:
+                return IncomeLevel.OVER_100K
+
+        def calculate_net_worth(self, answers):
+            if answers["Net Worth"] == "Less than $100,000":
+                return NetWorth.UNDER_100K
+            elif answers["Net Worth"] == "$100,000-$500,000":
+                return NetWorth.ONE_HUNDRED_TO_FIVE_HUNDRED_K
+            else:
+                return NetWorth.OVER_FIVE_HUNDRED_K
+
+        def calculate_occupation(self, answers):
+            if answers["Occupation"] == "Student":
+                return Occupation.STUDENT
+            elif answers["Occupation"] == "Working professional":
+                return Occupation.WORKING_PROFESSIONAL
+            else:
+                return Occupation.BUSINESS_OWNER
+
+        def calculate_education(self, answers):
+            if answers["Education"] == "High school":
+                return Education.HIGH_SCHOOL
+            elif answers["Education"] == "College":
+                return Education.COLLEGE
+            else:
+                return Education.POSTGRADUATE
+
+        def calculate_marital_status(self, answers):
+            if answers["Marital Status"] == "Single":
+                return MaritalStatus.SINGLE
+            elif answers["Marital Status"] == "Married":
+                return MaritalStatus.MARRIED
+            else:
+                return MaritalStatus.DIVORCED
+
+        def calculate_dependents(self, answers):
+            if answers["Dependents"] == "None":
+                return Dependents.NONE
+            elif answers["Dependents"] == "One":
+                return Dependents.ONE
+            else:
+                return Dependents.TWO_OR_MORE
+
+        def main():
+            test = InvestingPersonalityTest()
+            answers = test.administer_test()
+            profile = test.calculate_profile(answers)
+            print("Your investment profile is:")
+            print("Investment Style:", profile.style)
+            print("Investment Horizon:", profile.horizon)
+            print("Risk Tolerance:", profile.tolerance)
+            print("Financial Goal:", profile.goal)
+            print("Investment Experience:", profile.experience)
+            print("Age:", profile.age)
+            print("Income:", profile.income)
+            print("Net Worth:", profile.net_worth)
+            print("Occupation:", profile.occupation)
+            print("Education:", profile.education)
+            print("Marital Status:", profile.marital_status)
+            print("Dependents:", profile.dependents)
+
+        if __name__ == "__main__":
+            main()
+            
 class StockPricePredictor:
     def __init__(self, data, seq_len, batch_size, epochs, exog_vars, num_steps_ahead, num_stocks):
         self.data = data
@@ -3904,6 +4185,38 @@ class ARIMAtrain:
     # Evaluate the model using mean squared error
     mse = mean_squared_error(test, model_fit.forecast(steps=len(test)))
     print(f'Mean Squared Error: {mse:.2f}')
+
+class SWOTanalysis:
+    # Create a DataFrame from the SWOT data
+    swot_df = pd.DataFrame(swot_data)
+
+    # Plot the SWOT analysis as a table
+    plt.figure(figsize=(10, 6))
+    plt.axis('tight')
+    plt.axis('off')
+    plt.grid(b=None)
+    plt.table(cellText=[strengths, weaknesses, opportunities, threats], colLabels=['SWOT Analysis'], loc='center')
+    plt.title('SWOT Analysis')
+    plt.show()
+    # Define the SWOT analysis data
+    swot_data = {
+        'Strengths': [input("Enter Strength 1: "), input("Enter Strength 2: "), input("Enter Strength 3: ")],
+        'Weaknesses': [input("Enter Weakness 1: "), input("Enter Weakness 2: "), input("Enter Weakness 3: ")],
+        'Opportunities': [input("Enter Opportunity 1: "), input("Enter Opportunity 2: "), input("Enter Opportunity 3: ")],
+        'Threats': [input("Enter Threat 1: "), input("Enter Threat 2: "), input("Enter Threat 3: ")]
+    }
+
+    # Create a DataFrame from the SWOT data
+    swot_df = pd.DataFrame(swot_data)
+
+    # Plot the SWOT analysis as a table
+    plt.figure(figsize=(10, 6))
+    plt.axis('tight')
+    plt.axis('off')
+    plt.grid(b=None)
+    plt.table(cellText=swot_df.values, colLabels=swot_df.columns, loc='center')
+    plt.title('SWOT Analysis')
+    plt.show()
 
 class to_do:
     #develop as backend
