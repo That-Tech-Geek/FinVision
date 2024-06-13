@@ -1,3 +1,4 @@
+# Import Necessary Libraries for Program
 class Imports:
     from bs4 import BeautifulSoup
     import pandas as pd
