@@ -1,3 +1,3 @@
-yfinance
-os
-pandas
+pip install yfinance
+pip install os
+pip install pandas
