@@ -18,7 +18,7 @@ ticker = st.sidebar.text_input("Enter the stock ticker symbol", "AAPL")
 
 # Function to fetch stock data using yfinance
 def load_data(ticker):
-    stock_data = yf.download(ticker, period="1y")
+    stock_data = yf.download(ticker, period="max")
     stock_data.reset_index(inplace=True)
     return stock_data
 
