@@ -282,6 +282,7 @@ class IngestionEngine:
         self.processor = SentimentProcessor()
         self.writer = FirestoreBatchedWriter(db)
         self.key_rotator = KeyRotator(api_keys)
+        self.is_running = False
         
         # Finnhub template
         self.manager = WebSocketManager(
@@ -359,6 +360,7 @@ class IngestionEngine:
             })
 
     async def start(self):
+        self.is_running = True
         tasks = [
             self.writer.run_periodic_flush()
         ]
@@ -372,10 +374,12 @@ class IngestionEngine:
             tasks.append(self.run_simulator())
         
         # Start Reddit streaming if keys exist
-        if os.getenv("REDDIT_CLIENT_ID") and "YOUR_" not in os.getenv("REDDIT_CLIENT_ID"):
+        reddit_id = os.getenv("REDDIT_CLIENT_ID", "")
+        if reddit_id and "YOUR_" not in reddit_id:
             tasks.append(self.reddit_streamer.stream())
             
         await asyncio.gather(*tasks)
 
     def stop(self):
+        self.is_running = False
         self.manager.active = False

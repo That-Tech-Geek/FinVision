@@ -2,9 +2,11 @@ import logging
 import os
 import json
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import firestore
@@ -17,7 +19,7 @@ from firebase_admin import auth, credentials
 import praw
 from dotenv import load_dotenv
 from ingestion import IngestionEngine, SentimentProcessor
-from stealth_utils import get_reddit_compliance_ua
+from stealth_utils import get_reddit_compliance_ua, get_stealth_headers
 
 # Load environment variables from .env
 load_dotenv()
@@ -86,31 +88,33 @@ if not FINNHUB_KEYS and os.getenv("FINNHUB_API_KEY"):
 ingestion_engine = None
 sentiment_processor = SentimentProcessor()
 
-app = FastAPI(title="FinVision Sentiment Engine")
-
-@app.on_event("startup")
-async def startup_event():
+# --- Lifespan (replaces deprecated @app.on_event) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global ingestion_engine
+    # Startup
     if db:
-        # Use Finnhub keys for the default IngestionEngine
         ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
-        # Run ingestion in the background
         asyncio.create_task(ingestion_engine.start())
-        logger.info(f"Ingestion Engine started in background with {len(FINNHUB_KEYS)} keys")
-
-@app.on_event("shutdown")
-async def shutdown_event():
+        logger.info(f"Ingestion Engine started with {len(FINNHUB_KEYS)} Finnhub keys")
+    yield
+    # Shutdown
     if ingestion_engine:
         ingestion_engine.stop()
         logger.info("Ingestion Engine stopped")
 
-# CORS for frontend integration
+app = FastAPI(title="FinVision Sentiment Engine", lifespan=lifespan)
+
+# CORS — lock down to known origins in production
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 # --- Security Middleware ---
 async def verify_token(request: Request):
@@ -336,6 +340,18 @@ def read_root():
         "database": db_status,
         "engine": "FinVision Sentiment Analyzer",
         "tickers_monitored": TICKERS
+    }
+
+@app.get("/health")
+def health_check():
+    """Health endpoint consumed by OpenRun and load balancers."""
+    db_status = "ok" if db else "degraded"
+    engine_status = "running" if (ingestion_engine and ingestion_engine.is_running) else "idle"
+    return {
+        "status": "healthy",
+        "database": db_status,
+        "engine": engine_status,
+        "version": "1.0.0"
     }
 
 @app.post("/process/{ticker}")
