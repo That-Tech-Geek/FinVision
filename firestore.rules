@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow authenticated users to read sentiment data
+    match /sentimentLatest/{ticker} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only backend can write
+    }
+    match /sentimentHistorical/{id} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only backend can write
+    }
+    match /rawMentions/{id} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only backend can write
+    }
+  }
+}
