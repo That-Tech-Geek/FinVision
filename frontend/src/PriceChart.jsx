@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 
 const PriceChart = ({ data, ticker }) => {
@@ -79,4 +79,4 @@ const PriceChart = ({ data, ticker }) => {
   return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-export default PriceChart;
+export default memo(PriceChart);

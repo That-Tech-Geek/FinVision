@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 
 const SentimentChart = ({ data, color }) => {
@@ -83,4 +83,4 @@ const SentimentChart = ({ data, color }) => {
   return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-export default SentimentChart;
+export default memo(SentimentChart);

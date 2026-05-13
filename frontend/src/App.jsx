@@ -79,10 +79,12 @@ function App() {
           setMarketData(data);
         } else {
           setMarketData(null);
+          setError("Market data unavailable for this ticker.");
         }
       } catch (err) {
         console.error("Failed to fetch market data:", err);
         setMarketData(null);
+        setError("Network error fetching market data.");
       }
     };
     fetchMarketData();
@@ -334,7 +336,7 @@ function App() {
               </div>
               <div className="stat-row">
                 <span>Div Yield</span>
-                <span>{(marketData?.dividendYield * 100).toFixed(2)}%</span>
+                <span>{marketData?.dividendYield ? `${(marketData.dividendYield * 100).toFixed(2)}%` : 'N/A'}</span>
               </div>
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '12px', lineHeight: '1.4' }}>
