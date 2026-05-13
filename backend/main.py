@@ -349,6 +349,54 @@ async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks, u
         background_tasks.add_task(process_ticker_logic, ticker)
     return {"message": f"Processing started for {len(batch.tickers)} tickers", "triggered_by": user.get("email")}
 
+@app.get("/ticker/{ticker}")
+async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depends(verify_token)):
+    """Fetch multi-year historical data and fundamental info from Yahoo Finance."""
+    ticker = ticker.upper().strip()
+    # Handle crypto mapping for yfinance
+    yf_ticker = ticker
+    if ticker in ["BTC", "ETH", "SOL", "DOGE"]:
+        yf_ticker = f"{ticker}-USD"
+    
+    try:
+        t = yf.Ticker(yf_ticker)
+        
+        # 1. Fetch Historical Data (Multi-year)
+        hist = await asyncio.to_thread(lambda: t.history(period=period))
+        if hist.empty:
+            raise HTTPException(status_code=404, detail="No historical data found")
+        
+        # Reset index to get dates and format for frontend
+        hist_data = hist.reset_index()
+        history = []
+        for _, row in hist_data.iterrows():
+            history.append({
+                "time": row['Date'].strftime('%Y-%m-%d'),
+                "value": round(row['Close'], 2),
+                "open": round(row['Open'], 2),
+                "high": round(row['High'], 2),
+                "low": round(row['Low'], 2),
+                "volume": int(row['Volume'])
+            })
+
+        # 2. Fetch Fundamental Info
+        info = await asyncio.to_thread(lambda: t.info)
+        
+        return {
+            "ticker": ticker,
+            "name": info.get("longName", ticker),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "marketCap": info.get("marketCap"),
+            "peRatio": info.get("forwardPE"),
+            "dividendYield": info.get("dividendYield"),
+            "summary": info.get("longBusinessSummary"),
+            "history": history
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch YFinance data for {ticker}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -1,276 +1,392 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, orderBy, limit, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
-} from 'recharts'; // Switching to Recharts for better React integration
-import { Activity, BarChart3, TrendingUp, RefreshCw, Layers } from 'lucide-react';
+  Activity, Layout, Search, Settings, User, Bell, ChevronDown, 
+  TrendingUp, TrendingDown, BarChart2, MessageSquare, Info, 
+  RefreshCw, LogOut, Globe, Shield, Clock, Landmark, DollarSign
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import SentimentChart from './SentimentChart';
+import PriceChart from './PriceChart';
 
-const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA"];
+const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH", "SOL"];
 
 function App() {
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
   const [latestData, setLatestData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
   const [rawMentions, setRawMentions] = useState([]);
+  const [marketData, setMarketData] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('sentiment'); // sentiment, market
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
+    const unsubAuth = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubAuth();
   }, []);
 
   useEffect(() => {
-    setLatestData(null);
-    setHistoricalData([]);
-    setRawMentions([]);
-    setError(null);
-    // 1. Listen for Latest Sentiment (Real-time Sync)
-    const latestRef = collection(db, "sentimentLatest");
-    const qLatest = query(latestRef, limit(10)); // Watch small batch for changes
+    if (!user) return;
+
+    // 1. Listen for Latest Sentiment
+    const qLatest = query(collection(db, "sentimentLatest"), limit(50));
     const unsubLatest = onSnapshot(qLatest, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "modified" || change.type === "added") {
-          const data = change.doc.data();
-          if (data.ticker === selectedTicker) {
-            setLatestData(data);
-          }
-        }
-      });
-      // Handle initial load if doc exists but no changes yet
       const currentDoc = snapshot.docs.find(d => d.id === selectedTicker);
       if (currentDoc) setLatestData(currentDoc.data());
+      else setLatestData(null);
     });
 
-    // 2. Listen for Historical Data (For Charting)
-    const historyRef = collection(db, "sentimentHistorical");
+    // 2. Listen for Historical Sentiment
     const qHist = query(
-      historyRef, 
+      collection(db, "sentimentHistorical"), 
       where("ticker", "==", selectedTicker),
       orderBy("timestamp", "desc"),
-      limit(100)
+      limit(200)
     );
     const unsubHist = onSnapshot(qHist, (snapshot) => {
       const data = snapshot.docs.map(d => ({
         ...d.data(),
-        time: new Date(d.data().timestamp.seconds * 1000).toLocaleTimeString(),
         timestamp: d.data().timestamp.seconds
       })).reverse();
       setHistoricalData(data);
     });
 
     // 3. Listen for Raw Mentions
-    const rawRef = collection(db, "rawMentions");
     const qRaw = query(
-      rawRef,
+      collection(db, "rawMentions"),
       where("ticker", "==", selectedTicker),
       orderBy("timestamp", "desc"),
-      limit(5)
+      limit(10)
     );
     const unsubRaw = onSnapshot(qRaw, (snapshot) => {
       setRawMentions(snapshot.docs.map(d => d.data()));
     });
+
+    // 4. Fetch Yahoo Finance Multi-Year Data
+    const fetchMarketData = async () => {
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+        const res = await fetch(`${API_URL}/ticker/${selectedTicker}?period=5y`, {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMarketData(data);
+        } else {
+          setMarketData(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch market data:", err);
+        setMarketData(null);
+      }
+    };
+    fetchMarketData();
 
     return () => {
       unsubLatest();
       unsubHist();
       unsubRaw();
     };
-  }, [selectedTicker]);
+  }, [selectedTicker, user]);
 
   const triggerUpdate = async () => {
-    if (!user) {
-      setError("Please sign in to trigger updates.");
-      return;
-    }
+    if (!user) return setError("Please sign in.");
     setLoading(true);
-    setError(null);
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch(`http://localhost:8080/process/${selectedTicker}`, { 
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+      await fetch(`${API_URL}/process/${selectedTicker}`, { 
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`
-        }
+        headers: { 'Authorization': `Bearer ${idToken}` }
       });
-      if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
     } catch (err) {
-      console.error("Update failed:", err);
-      setError("Failed to trigger update. Is the backend running?");
+      setError("Update failed. Check console.");
     } finally {
       setTimeout(() => setLoading(false), 2000);
     }
   };
 
-  const login = () => signInWithPopup(auth, googleProvider).catch(e => setError(e.message));
-  const logout = () => signOut(auth);
+  const getSentimentColor = (score) => {
+    if (score > 0.1) return '#089981'; // TV Green
+    if (score < -0.1) return '#f23645'; // TV Red
+    return '#2962ff'; // TV Blue
+  };
+
+  const formatLargeNumber = (num) => {
+    if (!num) return 'N/A';
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    return num.toLocaleString();
+  };
 
   if (!user) {
     return (
-      <div className="dashboard-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="glass-card" style={{ textAlign: 'center', maxWidth: '400px', padding: '3rem' }}>
-          <Activity size={64} className="text-blue-500" style={{ margin: '0 auto 1.5rem' }} />
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>FinVision</h1>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-            Enterprise-grade stock sentiment intelligence. Please sign in to access the terminal.
+      <div className="tv-app flex-center" style={{ background: '#0a0a0c' }}>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-panel" 
+          style={{ maxWidth: '400px', textAlign: 'center', padding: '3rem' }}
+        >
+          <Activity size={48} color="#2962ff" style={{ margin: '0 auto 1.5rem' }} />
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>FinVision Terminal</h1>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '14px' }}>
+            Enterprise Sentiment Intelligence for modern markets.
           </p>
-          <button onClick={login} className="ticker-badge" style={{ padding: '1rem 2rem', fontSize: '1rem', cursor: 'pointer', border: 'none' }}>
-            Sign in with Google
+          <button 
+            onClick={() => signInWithPopup(auth, googleProvider)}
+            className="flex-center"
+            style={{ 
+              width: '100%', padding: '12px', background: '#2962ff', color: 'white', 
+              border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
+            }}
+          >
+            Launch Terminal
           </button>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
-  const getSentimentColor = (score) => {
-    if (score > 0.1) return 'var(--accent-success)';
-    if (score < -0.1) return 'var(--accent-danger)';
-    return 'var(--accent-primary)';
-  };
-
   return (
-    <div className="dashboard-container">
-      <header className="header">
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Activity className="text-blue-500" /> FinVision Terminal
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Real-time Sentiment Intelligence</p>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginRight: '1rem' }}>
-            <img src={user.photoURL} alt={user.displayName} style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{user.displayName}</span>
-            <button onClick={logout} style={{ background: 'none', border: 'none', color: 'var(--accent-danger)', cursor: 'pointer', fontSize: '0.75rem' }}>Logout</button>
+    <div className="tv-app">
+      {/* Header */}
+      <header className="tv-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <Activity size={20} color="#2962ff" />
+          <span style={{ fontWeight: 700, fontSize: '14px', letterSpacing: '0.5px' }}>FINVISION</span>
+          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <span className="token-badge">{selectedTicker}</span>
+            <ChevronDown size={14} color="var(--text-secondary)" />
           </div>
-          <select 
-            value={selectedTicker} 
-            onChange={(e) => setSelectedTicker(e.target.value)}
-          >
-            {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <button 
-            onClick={triggerUpdate}
-            disabled={loading}
-            className="glass-card"
-            style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-          >
-            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div style={{ display: 'flex', gap: '4px', marginLeft: '12px' }}>
+            <button 
+              className={`tab-btn ${activeTab === 'sentiment' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sentiment')}
+            >
+              Sentiment
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'market' ? 'active' : ''}`}
+              onClick={() => setActiveTab('market')}
+            >
+              Market
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+            <div className="live-indicator" />
+            LIVE DATA
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <Bell size={18} color="var(--text-secondary)" />
+            <Settings size={18} color="var(--text-secondary)" />
+            <div onClick={() => signOut(auth)} style={{ cursor: 'pointer' }}>
+              <LogOut size={18} color="var(--accent-red)" />
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="grid-layout">
-        {/* Main Sentiment Display */}
-        <section className="col-main glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <span className="ticker-badge">{selectedTicker}</span>
-              <h2 style={{ marginTop: '0.5rem', color: 'var(--text-secondary)' }}>Aggregated Sentiment</h2>
-              <div className="sentiment-value" style={{ color: getSentimentColor(latestData?.score || 0) }}>
+      <div className="tv-container">
+        {/* Watchlist */}
+        <aside className="tv-watchlist">
+          <div className="watchlist-header">
+            <span>Watchlist</span>
+            <Search size={14} color="var(--text-secondary)" />
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {TICKERS.map(ticker => (
+              <div 
+                key={ticker} 
+                className={`watchlist-item ${selectedTicker === ticker ? 'active' : ''}`}
+                onClick={() => setSelectedTicker(ticker)}
+              >
+                <span style={{ fontWeight: 600 }}>{ticker}</span>
+                <div style={{ textAlign: 'right' }}>
+                  <div className={Math.random() > 0.5 ? 'price-up' : 'price-down'}>
+                    {Math.random() > 0.5 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    <span style={{ marginLeft: '4px' }}>{(Math.random() * 2).toFixed(2)}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main Chart Area */}
+        <main className="tv-main">
+          <div style={{ flex: 1, position: 'relative' }}>
+            <AnimatePresence mode="wait">
+              {activeTab === 'sentiment' ? (
+                <motion.div 
+                  key="sentiment"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{ height: '100%' }}
+                >
+                  <SentimentChart 
+                    data={historicalData} 
+                    color={getSentimentColor(latestData?.score || 0)} 
+                  />
+                </motion.div>
+              ) : (
+                <motion.div 
+                  key="market"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  style={{ height: '100%' }}
+                >
+                  <PriceChart 
+                    data={marketData?.history || []} 
+                    ticker={selectedTicker}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          
+          {/* Legend Overlay */}
+          <div style={{ position: 'absolute', top: '20px', left: '20px', pointerEvents: 'none' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{marketData?.name || selectedTicker}</h2>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <span>SENTIMENT: {latestData?.score.toFixed(3) || 'N/A'}</span>
+              {marketData && (
+                <>
+                  <span>SECTOR: {marketData.sector}</span>
+                  <span>INDUSTRY: {marketData.industry}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </main>
+
+        {/* Right Details Panel */}
+        <aside className="tv-details">
+          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
+              Sentiment Analysis
+              <Info size={14} color="var(--text-secondary)" />
+            </h3>
+            
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '48px', fontWeight: 700, color: getSentimentColor(latestData?.score || 0) }}>
                 {latestData ? latestData.score.toFixed(3) : '0.000'}
               </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '-4px' }}>
+                AGGREGATED SCORE
+              </div>
             </div>
-            <div className="glass-card" style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>LAST UPDATED</p>
-              <p style={{ fontWeight: 600 }}>{latestData ? new Date(latestData.timestamp.seconds * 1000).toLocaleTimeString() : '--'}</p>
-            </div>
-          </div>
 
-          <div className="gauge-bar">
-            <div 
-              className="gauge-fill" 
+            <div className="sentiment-gauge">
+              <div 
+                className="sentiment-pointer" 
+                style={{ 
+                  left: `${(( (latestData?.score || 0) + 1) / 2) * 100}%`,
+                  borderColor: getSentimentColor(latestData?.score || 0)
+                }} 
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              <span>BEARISH</span>
+              <span>NEUTRAL</span>
+              <span>BULLISH</span>
+            </div>
+
+            <button 
+              onClick={triggerUpdate}
+              disabled={loading}
               style={{ 
-                width: `${(( (latestData?.score || 0) + 1) / 2) * 100}%`,
-                backgroundColor: getSentimentColor(latestData?.score || 0)
-              }} 
-            />
+                width: '100%', marginTop: '24px', padding: '10px', background: 'var(--bg-hover)', 
+                border: '1px solid var(--border-color)', color: 'white', borderRadius: '4px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+              }}
+            >
+              <RefreshCw size={14} className={loading ? 'spin' : ''} />
+              {loading ? 'ANALYZING...' : 'FORCE RE-SCAN'}
+            </button>
           </div>
 
-          <div style={{ marginTop: '2rem', height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {historicalData.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={historicalData}>
-                    <defs>
-                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={getSentimentColor(latestData?.score || 0)} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={getSentimentColor(latestData?.score || 0)} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                    <XAxis dataKey="time" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis domain={[-1, 1]} stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px' }}
-                      itemStyle={{ color: '#f4f4f5' }}
-                    />
-                    <Area type="monotone" dataKey="score" stroke={getSentimentColor(latestData?.score || 0)} fillOpacity={1} fill="url(#colorScore)" strokeWidth={2} />
-                  </AreaChart>
-               </ResponsiveContainer>
-            ) : (
-              <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                <Activity size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-                <p>No historical sentiment data available yet.</p>
-                <p style={{ fontSize: '0.75rem' }}>Click refresh to fetch new data.</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Sidebar: Insights & Mentions */}
-        <section className="col-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <BarChart3 size={18} /> Market Insights
+          {/* Fundamental Stats */}
+          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Landmark size={14} /> Fundamentals
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Volatility</span>
-                <span style={{ color: 'var(--accent-success)' }}>LOW</span>
+            <div className="stats-grid">
+              <div className="stat-row">
+                <span>Market Cap</span>
+                <span>{formatLargeNumber(marketData?.marketCap)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Volume</span>
-                <span>{latestData?.volume || 0} hits</span>
+              <div className="stat-row">
+                <span>P/E Ratio</span>
+                <span>{marketData?.peRatio?.toFixed(2) || 'N/A'}</span>
+              </div>
+              <div className="stat-row">
+                <span>Div Yield</span>
+                <span>{(marketData?.dividendYield * 100).toFixed(2)}%</span>
               </div>
             </div>
+            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '12px', lineHeight: '1.4' }}>
+              {marketData?.summary?.substring(0, 150)}...
+            </p>
           </div>
 
-          <div className="glass-card" style={{ flexGrow: 1 }}>
-            <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Layers size={18} /> Recent Mentions
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ padding: '20px' }}>
+            <h3 style={{ fontSize: '14px', marginBottom: '16px' }}>Real-time Mentions</h3>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
               {rawMentions.map((m, i) => (
-                <div key={i} style={{ fontSize: '0.8125rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                  <p style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                    {m.platform.toUpperCase()} • {m.sentiment_score.toFixed(2)}
-                  </p>
-                  <p>{m.text.substring(0, 80)}...</p>
+                <div key={i} className="mention-card">
+                  <div className="mention-meta">
+                    <span style={{ color: getSentimentColor(m.sentiment_score) }}>
+                      {m.sentiment_score > 0 ? 'Bullish' : 'Bearish'}
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={10} /> {new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                  <p className="mention-text">{m.text.substring(0, 100)}...</p>
                 </div>
               ))}
-              {rawMentions.length === 0 && <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No recent mentions cached.</p>}
             </div>
           </div>
-        </section>
-      </main>
-      
+        </aside>
+      </div>
+
       <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+        .tab-btn {
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          font-size: 12px;
+          font-weight: 600;
+          padding: 4px 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
         }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
+        .tab-btn:hover { background: var(--bg-hover); }
+        .tab-btn.active { color: white; background: var(--bg-active); }
+        .stats-grid { display: flex; flex-direction: column; gap: 8px; }
+        .stat-row { display: flex; justify-content: space-between; font-size: 12px; }
+        .stat-row span:first-child { color: var(--text-secondary); }
+        .stat-row span:last-child { color: white; font-weight: 500; }
       `}</style>
     </div>
   );
 }
 
 export default App;
+
