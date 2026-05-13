@@ -21,6 +21,7 @@ function App() {
   const [marketData, setMarketData] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('sentiment'); // sentiment, market
 
@@ -68,6 +69,7 @@ function App() {
 
     // 4. Fetch Yahoo Finance Multi-Year Data
     const fetchMarketData = async () => {
+      setMarketLoading(true);
       try {
         const idToken = await auth.currentUser.getIdToken();
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
@@ -85,6 +87,8 @@ function App() {
         console.error("Failed to fetch market data:", err);
         setMarketData(null);
         setError("Network error fetching market data.");
+      } finally {
+        setMarketLoading(false);
       }
     };
     fetchMarketData();
@@ -248,12 +252,19 @@ function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  style={{ height: '100%' }}
+                  style={{ height: '100%', position: 'relative' }}
                 >
-                  <PriceChart 
-                    data={marketData?.history || []} 
-                    ticker={selectedTicker}
-                  />
+                  {marketLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                      <RefreshCw size={24} className="spin" style={{ marginRight: '8px' }} />
+                      Loading Market Data...
+                    </div>
+                  ) : (
+                    <PriceChart 
+                      data={marketData?.history || []} 
+                      ticker={selectedTicker}
+                    />
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
