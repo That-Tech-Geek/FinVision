@@ -137,6 +137,7 @@ async def lifespan(app: FastAPI):
             pass
 
 app = FastAPI(title="FinVision Sentiment Engine", lifespan=lifespan)
+application = app
 
 # CORS — lock down to known origins in production
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
