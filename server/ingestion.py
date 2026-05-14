@@ -373,10 +373,8 @@ class IngestionEngine:
             logger.warning("No valid API keys found. Running in SIMULATOR mode.")
             tasks.append(self.run_simulator())
         
-        # Start Reddit streaming if keys exist
-        reddit_id = os.getenv("REDDIT_CLIENT_ID", "")
-        if reddit_id and "YOUR_" not in reddit_id:
-            tasks.append(self.reddit_streamer.stream())
+        # Always start Reddit streaming (it has a public JSON fallback)
+        tasks.append(self.reddit_streamer.stream())
             
         await asyncio.gather(*tasks)
 

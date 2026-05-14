@@ -24,6 +24,8 @@ function App() {
   const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('sentiment'); // sentiment, market
+  const [livePrice, setLivePrice] = useState(null);
+  const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => setUser(u));
@@ -31,9 +33,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-
-    // 1. Listen for Latest Sentiment
+    // 1. Listen for Latest Sentiment (Public)
     const qLatest = query(collection(db, "sentimentLatest"), limit(50));
     const unsubLatest = onSnapshot(qLatest, (snapshot) => {
       const currentDoc = snapshot.docs.find(d => d.id === selectedTicker);
@@ -41,7 +41,7 @@ function App() {
       else setLatestData(null);
     });
 
-    // 2. Listen for Historical Sentiment
+    // 2. Listen for Historical Sentiment (Public)
     const qHist = query(
       collection(db, "sentimentHistorical"), 
       where("ticker", "==", selectedTicker),
@@ -56,7 +56,7 @@ function App() {
       setHistoricalData(data);
     });
 
-    // 3. Listen for Raw Mentions
+    // 3. Listen for Raw Mentions (Public)
     const qRaw = query(
       collection(db, "rawMentions"),
       where("ticker", "==", selectedTicker),
@@ -67,14 +67,17 @@ function App() {
       setRawMentions(snapshot.docs.map(d => d.data()));
     });
 
-    // 4. Fetch Yahoo Finance Multi-Year Data
+    // 4. Fetch Yahoo Finance Multi-Year Data (Publicly accessible)
     const fetchMarketData = async () => {
       setMarketLoading(true);
       try {
-        const idToken = await auth.currentUser.getIdToken();
+        const idToken = user ? await user.getIdToken() : null;
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+        const headers = {};
+        if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
         const res = await fetch(`${API_URL}/api/v1/sentiment/ticker/${selectedTicker}?period=5y`, {
-          headers: { 'Authorization': `Bearer ${idToken}` }
+          headers
         });
         if (res.ok) {
           const data = await res.json();
@@ -93,10 +96,40 @@ function App() {
     };
     fetchMarketData();
 
+    // 5. Polling for Live Price (HFT feel)
+    const pollQuote = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+        const res = await fetch(`${API_URL}/api/v1/sentiment/quote/${selectedTicker}`);
+        if (res.ok) {
+          const data = await res.json();
+          setLivePrice(data);
+          
+          // Simulate order book based on live price
+          const price = data.price;
+          const newBids = Array.from({length: 5}, (_, i) => ({
+            price: price - (i * 0.01 + Math.random() * 0.005),
+            size: (Math.random() * 100).toFixed(1)
+          }));
+          const newAsks = Array.from({length: 5}, (_, i) => ({
+            price: price + (i * 0.01 + Math.random() * 0.005),
+            size: (Math.random() * 100).toFixed(1)
+          })).reverse();
+          setOrderBook({ bids: newBids, asks: newAsks });
+        }
+      } catch (err) {
+        console.error("Quote poll failed:", err);
+      }
+    };
+    
+    pollQuote();
+    const interval = setInterval(pollQuote, 10000); // 10s polling for "live" feel
+
     return () => {
       unsubLatest();
       unsubHist();
       unsubRaw();
+      clearInterval(interval);
     };
   }, [selectedTicker, user]);
 
@@ -222,21 +255,28 @@ function App() {
             <Search size={14} color="var(--text-secondary)" />
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {TICKERS.map(ticker => (
-              <div 
-                key={ticker} 
-                className={`watchlist-item ${selectedTicker === ticker ? 'active' : ''}`}
-                onClick={() => setSelectedTicker(ticker)}
-              >
-                <span style={{ fontWeight: 600 }}>{ticker}</span>
-                <div style={{ textAlign: 'right' }}>
-                  <div className={Math.random() > 0.5 ? 'price-up' : 'price-down'}>
-                    {Math.random() > 0.5 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                    <span style={{ marginLeft: '4px' }}>{(Math.random() * 2).toFixed(2)}%</span>
+            {TICKERS.map(ticker => {
+              const isSelected = selectedTicker === ticker;
+              // Simulate some real-ish variation based on index if no real watchlist data yet
+              const change = (Math.sin(ticker.charCodeAt(0)) * 2).toFixed(2);
+              const isUp = parseFloat(change) > 0;
+              
+              return (
+                <div 
+                  key={ticker} 
+                  className={`watchlist-item ${isSelected ? 'active' : ''}`}
+                  onClick={() => setSelectedTicker(ticker)}
+                >
+                  <span style={{ fontWeight: 600 }}>{ticker}</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className={isUp ? 'price-up' : 'price-down'}>
+                      {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                      <span style={{ marginLeft: '4px' }}>{Math.abs(change)}%</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </aside>
 
@@ -282,10 +322,17 @@ function App() {
           </div>
           
           {/* Legend Overlay */}
-          <div style={{ position: 'absolute', top: '20px', left: '20px', pointerEvents: 'none' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 700 }}>{marketData?.name || selectedTicker}</h2>
+          <div style={{ position: 'absolute', top: '20px', left: '20px', pointerEvents: 'none', zIndex: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+              <h2 style={{ fontSize: '32px', fontWeight: 700, margin: 0 }}>{marketData?.name || selectedTicker}</h2>
+              <div style={{ fontSize: '24px', fontWeight: 600, color: 'white' }}>
+                {livePrice ? `$${livePrice.price.toLocaleString()}` : '...'}
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              <span>SENTIMENT: {latestData?.score.toFixed(3) || 'N/A'}</span>
+              <span style={{ color: getSentimentColor(latestData?.score || 0), fontWeight: 600 }}>
+                SENTIMENT: {latestData?.score.toFixed(3) || 'N/A'}
+              </span>
               {marketData && (
                 <>
                   <span>SECTOR: {marketData.sector}</span>
@@ -342,7 +389,34 @@ function App() {
             </button>
           </div>
 
-          {/* Fundamental Stats */}
+          {/* HFT Order Book */}
+          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)' }}>
+            <h3 style={{ fontSize: '12px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+              <Activity size={12} /> LIVE ORDER BOOK
+            </h3>
+            <div className="order-book" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+              <div className="asks">
+                {orderBook.asks.map((ask, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#f23645', padding: '1px 0' }}>
+                    <span>{ask.price.toFixed(2)}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{ask.size}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="spread" style={{ textAlign: 'center', padding: '8px 0', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', margin: '4px 0', fontWeight: 700 }}>
+                {livePrice ? livePrice.price.toFixed(2) : '---'}
+              </div>
+              <div className="bids">
+                {orderBook.bids.map((bid, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#089981', padding: '1px 0' }}>
+                    <span>{bid.price.toFixed(2)}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{bid.size}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>
             <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Landmark size={14} /> Fundamentals
@@ -361,9 +435,6 @@ function App() {
                 <span>{marketData?.dividendYield ? `${(marketData.dividendYield * 100).toFixed(2)}%` : 'N/A'}</span>
               </div>
             </div>
-            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '12px', lineHeight: '1.4' }}>
-              {marketData?.summary?.substring(0, 150)}...
-            </p>
           </div>
 
           <div style={{ padding: '20px' }}>

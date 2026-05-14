@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "finvision-68f62"
+  },
   "targets": {},
   "etags": {}
 }

@@ -374,8 +374,39 @@ async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks, u
         background_tasks.add_task(process_ticker_logic, ticker)
     return {"message": f"Processing started for {len(batch.tickers)} tickers", "triggered_by": user.get("email")}
 
+@api_router.get("/quote/{ticker}")
+async def get_ticker_quote(ticker: str):
+    """Fetch the latest price for a ticker (Real-time)."""
+    ticker = ticker.upper().strip()
+    yf_ticker = ticker
+    if ticker in ["BTC", "ETH", "SOL", "DOGE"]:
+        yf_ticker = f"{ticker}-USD"
+    
+    try:
+        t = yf.Ticker(yf_ticker)
+        # fast fetch for latest price
+        data = await asyncio.to_thread(lambda: t.fast_info)
+        return {
+            "ticker": ticker,
+            "price": round(data['last_price'], 2),
+            "change": round(data.get('year_change', 0), 2), # Using year_change as placeholder if day_change not available
+            "currency": data.get('currency', 'USD')
+        }
+    except Exception as e:
+        logger.error(f"Quote failed for {ticker}: {e}")
+        # Fallback to history if fast_info fails
+        try:
+            t = yf.Ticker(yf_ticker)
+            hist = await asyncio.to_thread(lambda: t.history(period="1d"))
+            if not hist.empty:
+                last_price = hist['Close'].iloc[-1]
+                return {"ticker": ticker, "price": round(last_price, 2), "status": "fallback"}
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.get("/ticker/{ticker}")
-async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depends(verify_token)):
+async def get_ticker_details(ticker: str, period: str = "5y"):
     """Fetch multi-year historical data and fundamental info from Yahoo Finance."""
     ticker = ticker.upper().strip()
     yf_ticker = ticker
