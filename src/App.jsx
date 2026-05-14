@@ -30,6 +30,14 @@ function App() {
   
   const commandInputRef = useRef(null);
 
+  const getCurrencySymbol = (code) => {
+    const symbols = {
+      'USD': '$', 'INR': '₹', 'GBP': '£', 'EUR': '€', 'JPY': '¥', 
+      'CNY': '¥', 'CAD': 'C$', 'AUD': 'A$', 'HKD': 'HK$'
+    };
+    return symbols[code] || code || '$';
+  };
+
   useEffect(() => {
     // 1. Fetch Yahoo Finance
     const fetchMarketData = async () => {
@@ -291,10 +299,10 @@ function App() {
           {/* HUD Overlay */}
           <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.8)', padding: '8px', border: '1px solid #333', zIndex: 10 }}>
             <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-amber)' }}>
-              {livePrice ? `$${livePrice.price.toLocaleString()}` : 'LOADING...'}
+              {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-              MCAP: {formatLargeNumber(marketData?.stats?.['Market Cap'])} | SENT: {(latestData?.score || 0).toFixed(4)}
+              MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | SENT: {(latestData?.score || 0).toFixed(4)}
             </div>
           </div>
         </div>
@@ -309,7 +317,8 @@ function App() {
                   <div style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{label}</div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>
                     {typeof value === 'number' ? 
-                      (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : formatLargeNumber(value)) 
+                      (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : 
+                       (label.includes('High') || label.includes('Low') || label.includes('Target') || label.includes('Cap') ? getCurrencySymbol(marketData?.currency) : '') + formatLargeNumber(value)) 
                       : (value || 'N/A')}
                   </div>
                 </div>
@@ -350,7 +359,7 @@ function App() {
               </div>
             ))}
             <div style={{ textAlign: 'center', padding: '4px 0', color: 'white', fontWeight: 700, borderTop: '1px solid #333', borderBottom: '1px solid #333', margin: '4px 0' }}>
-              {livePrice?.price?.toFixed(2) || '0.00'}
+              {getCurrencySymbol(livePrice?.currency)}{livePrice?.price?.toFixed(2) || '0.00'}
             </div>
             {orderBook.bids.map((bid, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-green)' }}>

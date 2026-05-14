@@ -156,14 +156,28 @@ async def get_quote(ticker: str):
                 if res.status_code == 200:
                     data = res.json()
                     if data.get('c'):
-                        return {"ticker": ticker, "price": round(data['c'], 2), "change": round(data.get('dp', 0), 2)}
+                        # Finnhub doesn't provide currency easily in quote, default to yf for currency
+                        t = yf.Ticker(ticker)
+                        info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=5.0)
+                        return {
+                            "ticker": ticker, 
+                            "price": round(data['c'], 2), 
+                            "change": round(data.get('dp', 0), 2),
+                            "currency": info.get("currency", "USD")
+                        }
         except: pass
     
     # Fallback to yfinance
     try:
         t = yf.Ticker(ticker)
         data = await asyncio.wait_for(asyncio.to_thread(lambda: t.fast_info), timeout=10.0)
-        return {"ticker": ticker, "price": round(data['last_price'], 2), "change": round(data.get('year_change', 0), 2)}
+        info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=5.0)
+        return {
+            "ticker": ticker, 
+            "price": round(data['last_price'], 2), 
+            "change": round(data.get('year_change', 0), 2),
+            "currency": info.get("currency", "USD")
+        }
     except: raise HTTPException(status_code=502)
 
 @app.get("/api/v1/sentiment/ticker/{ticker}")
@@ -178,6 +192,7 @@ async def get_details(ticker: str):
             "name": info.get("longName", ticker.upper()),
             "sector": info.get("sector", "N/A"),
             "industry": info.get("industry", "N/A"),
+            "currency": info.get("currency", "USD"),
             "summary": info.get("longBusinessSummary", "N/A"),
             "stats": {
                 "Market Cap": info.get("marketCap"),
