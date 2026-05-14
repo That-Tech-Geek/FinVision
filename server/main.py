@@ -21,7 +21,7 @@ _current_dir = os.path.dirname(os.path.abspath(__file__))
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
-from ingestion import IngestionEngine, SentimentProcessor
+from ingestion import IngestionEngine, SentimentProcessor, KeyRotator
 from stealth_utils import get_reddit_compliance_ua, get_stealth_headers
 
 # --- Logging ---
@@ -32,6 +32,7 @@ logger = logging.getLogger("finvision")
 db = None
 ingestion_engine = None
 sentiment_processor = None # Lazy loaded
+rest_key_rotator = None # Global for quote cycling
 
 SENTIMENT_CACHE = {
     "latest": {}, 
@@ -51,7 +52,6 @@ def init_firebase():
     if db: return db
     try:
         PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "finvision-68f62")
-        # Priority 1: JSON String (Vercel/Cloud)
         sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
         if sa_json:
             try:
@@ -66,43 +66,33 @@ def init_firebase():
                 return db
             except Exception as j_err:
                 logger.error(f"❌ JSON SA Parse Failed: {j_err}")
-
-        # Priority 2: File Path (Local)
+        
         sa_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
         if sa_path and os.path.exists(sa_path):
             cred = credentials.Certificate(sa_path)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
             db = AsyncClient(project=PROJECT_ID)
-            logger.info(f"✅ Firestore initialized via Path: {sa_path}")
+            logger.info(f"✅ Firestore initialized via Path")
             return db
-
-        # Priority 3: ADC
-        if os.getenv("USE_ADC") == "true":
-            db = AsyncClient(project=PROJECT_ID)
-            if not firebase_admin._apps:
-                firebase_admin.initialize_app()
-            logger.info("✅ Firestore initialized via ADC")
-            return db
-            
-        logger.warning("⚠️ No Firebase credentials found. Sentiment persistence DISABLED.")
     except Exception as e:
-        logger.error(f"❌ Critical Firebase Failure: {e}")
+        logger.error(f"Firebase init failed: {e}")
     return db
 
 # --- Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ingestion_engine
+    global ingestion_engine, rest_key_rotator
     init_firebase()
     
     TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH"]
     FINNHUB_KEYS = [os.getenv(f"FINNHUB_API_KEY_{i}") for i in range(1, 6)]
     FINNHUB_KEYS = [k for k in FINNHUB_KEYS if k] or [os.getenv("FINNHUB_API_KEY")]
     FINNHUB_KEYS = [k for k in FINNHUB_KEYS if k]
+    
+    rest_key_rotator = KeyRotator(FINNHUB_KEYS)
 
     try:
-        # Start ingestion in background
         ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
         asyncio.create_task(ingestion_engine.start())
         logger.info("Ingestion Engine started")
@@ -131,54 +121,75 @@ class TickerBatch(BaseModel):
 
 async def process_ticker_logic(ticker: str):
     ticker = ticker.upper().strip()
-    # Lazy load processor to avoid startup timeout
     proc = get_processor()
-    
-    # Simple News-based sentiment for quick results
     try:
         t = yf.Ticker(ticker)
         news = await asyncio.wait_for(asyncio.to_thread(lambda: t.news), timeout=10.0)
         titles = [n["title"] for n in news if n.get("title")]
         if not titles: return
-        
         scores = [proc.analyze(title) for title in titles]
         avg_score = sum(scores) / len(scores)
         now = datetime.now(timezone.utc)
-        
-        # Cache update
         SENTIMENT_CACHE["latest"][ticker] = {"ticker": ticker, "score": avg_score, "timestamp": now}
         if ticker not in SENTIMENT_CACHE["historical"]: SENTIMENT_CACHE["historical"][ticker] = []
         SENTIMENT_CACHE["historical"][ticker].append({"ticker": ticker, "score": avg_score, "timestamp": now, "volume": len(titles)})
         SENTIMENT_CACHE["historical"][ticker] = SENTIMENT_CACHE["historical"][ticker][-500:]
-        
-        # Firestore update if available
         if db:
             await db.collection("sentimentLatest").document(ticker).set({"ticker": ticker, "score": avg_score, "timestamp": now})
-            await db.collection("sentimentHistorical").add({"ticker": ticker, "score": avg_score, "timestamp": now, "volume": len(titles)})
     except Exception as e:
         logger.error(f"Processing failed for {ticker}: {e}")
 
 # --- API Endpoints ---
 @app.get("/api/v1/sentiment/health")
 def health():
-    return {"status": "ok", "db": db is not None}
-
-@app.post("/api/v1/sentiment/process/{ticker}")
-async def process_ticker(ticker: str, background_tasks: BackgroundTasks):
-    background_tasks.add_task(process_ticker_logic, ticker)
-    return {"message": "Processing"}
-
-@app.post("/api/v1/sentiment/process-batch")
-async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks):
-    for t in batch.tickers: background_tasks.add_task(process_ticker_logic, t)
-    return {"message": "Batch Processing"}
+    return {"status": "ok", "db": db is not None, "rotator": rest_key_rotator is not None}
 
 @app.get("/api/v1/sentiment/quote/{ticker}")
 async def get_quote(ticker: str):
+    ticker = ticker.upper().strip()
+    # Try Finnhub via Rotator
+    if rest_key_rotator and rest_key_rotator.keys:
+        key = rest_key_rotator.get_key()
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.get(f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={key}", timeout=5.0)
+                if res.status_code == 200:
+                    data = res.json()
+                    if data.get('c'):
+                        return {"ticker": ticker, "price": round(data['c'], 2), "change": round(data.get('dp', 0), 2)}
+        except: pass
+    
+    # Fallback to yfinance
     try:
-        t = yf.Ticker(ticker.upper())
+        t = yf.Ticker(ticker)
         data = await asyncio.wait_for(asyncio.to_thread(lambda: t.fast_info), timeout=10.0)
         return {"ticker": ticker, "price": round(data['last_price'], 2), "change": round(data.get('year_change', 0), 2)}
+    except: raise HTTPException(status_code=502)
+
+@app.get("/api/v1/sentiment/ticker/{ticker}")
+async def get_details(ticker: str):
+    try:
+        t = yf.Ticker(ticker.upper())
+        hist = await asyncio.to_thread(lambda: t.history(period="5y"))
+        history = [{"time": r['Date'].strftime('%Y-%m-%d'), "value": round(r['Close'], 2), "volume": int(r['Volume'])} for _, r in hist.reset_index().iterrows()]
+        info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=15.0)
+        return {
+            "ticker": ticker.upper(),
+            "name": info.get("longName", ticker.upper()),
+            "sector": info.get("sector", "N/A"),
+            "industry": info.get("industry", "N/A"),
+            "summary": info.get("longBusinessSummary", "N/A"),
+            "stats": {
+                "Market Cap": info.get("marketCap"),
+                "P/E Ratio": info.get("trailingPE"),
+                "Forward P/E": info.get("forwardPE"),
+                "Dividend Yield": info.get("dividendYield"),
+                "Beta": info.get("beta"),
+                "52W High": info.get("fiftyTwoWeekHigh"),
+                "52W Low": info.get("fiftyTwoWeekLow")
+            },
+            "history": history
+        }
     except: raise HTTPException(status_code=502)
 
 @app.get("/api/v1/sentiment/news/{ticker}")
@@ -193,43 +204,10 @@ async def get_fallback(ticker: str):
     t = ticker.upper()
     return {"latest": SENTIMENT_CACHE["latest"].get(t), "historical": SENTIMENT_CACHE["historical"].get(t, [])}
 
-@app.get("/api/v1/sentiment/ticker/{ticker}")
-async def get_details(ticker: str):
-    try:
-        t = yf.Ticker(ticker.upper())
-        # History fetch (async thread)
-        hist = await asyncio.to_thread(lambda: t.history(period="5y"))
-        history = [{"time": r['Date'].strftime('%Y-%m-%d'), "value": round(r['Close'], 2), "volume": int(r['Volume'])} for _, r in hist.reset_index().iterrows()]
-        
-        # Fundamental Info fetch
-        info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=15.0)
-        
-        # Clean up info for the frontend
-        return {
-            "ticker": ticker.upper(),
-            "name": info.get("longName", ticker.upper()),
-            "sector": info.get("sector", "N/A"),
-            "industry": info.get("industry", "N/A"),
-            "summary": info.get("longBusinessSummary", "No summary available."),
-            "stats": {
-                "Market Cap": info.get("marketCap"),
-                "Enterprise Value": info.get("enterpriseValue"),
-                "P/E Ratio": info.get("trailingPE"),
-                "Forward P/E": info.get("forwardPE"),
-                "Dividend Yield": info.get("dividendYield"),
-                "Beta": info.get("beta"),
-                "52W High": info.get("fiftyTwoWeekHigh"),
-                "52W Low": info.get("fiftyTwoWeekLow"),
-                "Avg Volume": info.get("averageVolume"),
-                "Total Revenue": info.get("totalRevenue"),
-                "EBITDA": info.get("ebitda"),
-                "Profit Margin": info.get("profitMargins"),
-            },
-            "history": history
-        }
-    except Exception as e:
-        logger.error(f"Details failed for {ticker}: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch ticker details")
+@app.post("/api/v1/sentiment/process/{ticker}")
+async def process_ticker(ticker: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(process_ticker_logic, ticker)
+    return {"message": "Processing"}
 
 if __name__ == "__main__":
     import uvicorn
