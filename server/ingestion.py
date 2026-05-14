@@ -38,14 +38,29 @@ class SentimentProcessor:
         self._ensure_nltk_data()
 
     def _ensure_nltk_data(self):
+        # On serverless platforms like Vercel, the home directory is read-only.
+        # Use /tmp for dynamic downloads and add it to the search path.
+        tmp_path = "/tmp/nltk_data"
+        if not os.path.exists(tmp_path):
+            try:
+                os.makedirs(tmp_path, exist_ok=True)
+            except:
+                pass
+        
+        if tmp_path not in nltk.data.path:
+            nltk.data.path.append(tmp_path)
+
         resources = ['tokenizers/punkt', 'tokenizers/punkt_tab']
         for res in resources:
             try:
                 nltk.data.find(res)
             except (LookupError, AttributeError):
                 resource_name = res.split('/')[-1]
-                logger.info(f"Downloading NLTK resource: {resource_name}")
-                nltk.download(resource_name, quiet=True)
+                logger.info(f"Downloading NLTK resource: {resource_name} to {tmp_path}")
+                try:
+                    nltk.download(resource_name, download_dir=tmp_path, quiet=True)
+                except Exception as e:
+                    logger.error(f"NLTK download failed for {resource_name}: {e}")
 
     def analyze(self, text: str) -> float:
         if not text or not isinstance(text, str): return 0.0
