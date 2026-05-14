@@ -335,7 +335,7 @@ function App() {
               </div>
             ))}
             <div style={{ textAlign: 'center', padding: '4px 0', color: 'white', fontWeight: 700, borderTop: '1px solid #333', borderBottom: '1px solid #333', margin: '4px 0' }}>
-              {livePrice?.price.toFixed(2)}
+              {livePrice?.price?.toFixed(2) || '0.00'}
             </div>
             {orderBook.bids.map((bid, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-green)' }}>
