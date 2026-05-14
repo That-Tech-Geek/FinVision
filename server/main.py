@@ -9,6 +9,8 @@ from typing import List, Dict, Any, Optional
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from google.cloud import firestore
 from google.cloud.firestore import AsyncClient
 import yfinance as yf
@@ -448,6 +450,28 @@ async def get_ticker_details(ticker: str, period: str = "5y"):
         raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
 
 app.include_router(api_router)
+
+# --- Serve Frontend (Monolithic Integration) ---
+# This allows a single deployment to handle both backend and frontend.
+frontend_path = os.path.join(os.path.dirname(__file__), "..", "dist")
+
+if os.path.exists(frontend_path):
+    # Mount static assets (JS, CSS, Images)
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+
+    # Catch-all route to serve the SPA index.html
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Prevent intercepting API calls if they don't match the prefix but are meant for backend
+        if full_path.startswith("api/v1"):
+             raise HTTPException(status_code=404)
+        
+        index_path = os.path.join(frontend_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"message": "Frontend build not found. Run 'npm run build' first."}
+else:
+    logger.warning(f"Frontend build directory not found at: {frontend_path}")
 
 if __name__ == "__main__":
     import uvicorn

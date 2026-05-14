@@ -72,7 +72,7 @@ function App() {
       setMarketLoading(true);
       try {
         const idToken = user ? await user.getIdToken() : null;
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+        const API_URL = import.meta.env.VITE_API_URL || '';
         const headers = {};
         if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
 
@@ -99,7 +99,7 @@ function App() {
     // 5. Polling for Live Price (HFT feel)
     const pollQuote = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+        const API_URL = import.meta.env.VITE_API_URL || '';
         const res = await fetch(`${API_URL}/api/v1/sentiment/quote/${selectedTicker}`);
         if (res.ok) {
           const data = await res.json();
@@ -138,7 +138,7 @@ function App() {
     setLoading(true);
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+      const API_URL = import.meta.env.VITE_API_URL || '';
       await fetch(`${API_URL}/api/v1/sentiment/process/${selectedTicker}`, { 
         method: 'POST',
         headers: { 'Authorization': `Bearer ${idToken}` }
