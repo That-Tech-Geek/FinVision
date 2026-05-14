@@ -124,13 +124,25 @@ function App() {
 
   const handleCommand = (e) => {
     if (e.key === 'Enter') {
-      const parts = command.toUpperCase().split(' ');
+      const input = command.trim().toUpperCase();
+      if (!input) return;
+
+      const parts = input.split(' ');
+      
+      // GO TICKER or just TICKER
+      let newTicker = "";
       if (parts[0] === 'GO' && parts[1]) {
-        setSelectedTicker(parts[1]);
-      } else if (TICKERS.includes(parts[0])) {
-        setSelectedTicker(parts[0]);
+        newTicker = parts[1];
+      } else {
+        newTicker = parts[0];
       }
-      setCommand("");
+
+      if (newTicker) {
+        setSelectedTicker(newTicker);
+        setCommand("");
+        // Focus the input back after a small delay to keep flow
+        setTimeout(() => commandInputRef.current?.focus(), 50);
+      }
     }
   };
 
@@ -202,8 +214,6 @@ function App() {
           onKeyDown={handleCommand}
         />
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <Bell size={14} color="var(--text-secondary)" />
-          <Settings size={14} color="var(--text-secondary)" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
             <User size={14} />
             <span>TERMINAL</span>
@@ -213,7 +223,7 @@ function App() {
 
       {/* Watchlist */}
       <aside className="panel bb-watchlist">
-        <div className="section-header">MARKET BENCHMARKS</div>
+        <div className="section-header">TRENDING MARKETS</div>
         <div style={{ maxHeight: '200px', overflowY: 'auto', borderBottom: '1px solid var(--border-color)' }}>
           {INDICES.map(ticker => (
             <WatchlistItem 
@@ -225,7 +235,7 @@ function App() {
           ))}
         </div>
         
-        <div className="section-header">EQUITIES & CRYPTO</div>
+        <div className="section-header">TRENDING STOCKS</div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {TICKERS.map(ticker => (
             <WatchlistItem 
