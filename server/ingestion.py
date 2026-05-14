@@ -105,7 +105,10 @@ class FirestoreBatchedWriter:
             await self._flush_unlocked()
 
     async def _flush_unlocked(self):
-        if not self.queue:
+        if not self.queue or not self.db:
+            if not self.db and self.queue:
+                # Clear queue if no DB, since we can't write
+                self.queue = []
             return
         
         try:

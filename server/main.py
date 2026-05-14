@@ -96,14 +96,12 @@ async def lifespan(app: FastAPI):
     FINNHUB_KEYS = [k for k in FINNHUB_KEYS if k]
     if not FINNHUB_KEYS and os.getenv("FINNHUB_API_KEY"):
         FINNHUB_KEYS = [os.getenv("FINNHUB_API_KEY")]
-
+    # Startup
     try:
-        if db:
-            ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
-            asyncio.create_task(ingestion_engine.start())
-            logger.info(f"Ingestion Engine started")
-        else:
-            logger.warning("Firestore not connected. Ingestion Engine will not start.")
+        # Always start ingestion engine (will use in-memory fallback if db is None)
+        ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
+        asyncio.create_task(ingestion_engine.start())
+        logger.info(f"Ingestion Engine started (Firestore: {'Enabled' if db else 'Disabled'})")
     except Exception as e:
         logger.error(f"Failed to start Ingestion Engine: {e}")
         
