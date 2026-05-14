@@ -274,12 +274,46 @@ function App() {
           )}
 
           {/* HUD Overlay */}
-          <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.6)', padding: '8px', border: '1px solid #333' }}>
+          <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.8)', padding: '8px', border: '1px solid #333', zIndex: 10 }}>
             <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-amber)' }}>
               {livePrice ? `$${livePrice.price.toLocaleString()}` : 'LOADING...'}
             </div>
             <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-              VOL: {formatLargeNumber(marketData?.marketCap)} | SENT: {(latestData?.score || 0).toFixed(4)}
+              MCAP: {formatLargeNumber(marketData?.stats?.['Market Cap'])} | SENT: {(latestData?.score || 0).toFixed(4)}
+            </div>
+          </div>
+        </div>
+
+        {/* Fundamentals Bald Spot Filler */}
+        <div className="fundamentals-panel" style={{ padding: '16px', borderTop: '1px solid var(--border-color)', background: '#050505', display: 'flex', gap: '20px', overflowY: 'auto' }}>
+          <div style={{ flex: 1 }}>
+            <div className="section-header" style={{ marginBottom: '10px' }}>KEY STATISTICS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
+              {marketData?.stats && Object.entries(marketData.stats).map(([label, value]) => (
+                <div key={label} style={{ background: '#111', padding: '6px', border: '1px solid #222' }}>
+                  <div style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{label}</div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>
+                    {typeof value === 'number' ? 
+                      (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : formatLargeNumber(value)) 
+                      : (value || 'N/A')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div style={{ width: '300px', borderLeft: '1px solid #222', paddingLeft: '20px' }}>
+            <div className="section-header" style={{ marginBottom: '10px' }}>BUSINESS SUMMARY</div>
+            <div style={{ fontSize: '11px', lineHeight: 1.5, color: 'var(--text-secondary)', maxHeight: '150px', overflowY: 'auto' }}>
+              {marketData?.summary}
+            </div>
+            <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
+                <div style={{ fontSize: '9px', background: '#111', padding: '4px 8px', border: '1px solid #333' }}>
+                    SECTOR: <span style={{ color: 'white' }}>{marketData?.sector}</span>
+                </div>
+                <div style={{ fontSize: '9px', background: '#111', padding: '4px 8px', border: '1px solid #333' }}>
+                    IND: <span style={{ color: 'white' }}>{marketData?.industry}</span>
+                </div>
             </div>
           </div>
         </div>

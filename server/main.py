@@ -197,10 +197,39 @@ async def get_fallback(ticker: str):
 async def get_details(ticker: str):
     try:
         t = yf.Ticker(ticker.upper())
+        # History fetch (async thread)
         hist = await asyncio.to_thread(lambda: t.history(period="5y"))
         history = [{"time": r['Date'].strftime('%Y-%m-%d'), "value": round(r['Close'], 2), "volume": int(r['Volume'])} for _, r in hist.reset_index().iterrows()]
-        return {"ticker": ticker, "history": history}
-    except: raise HTTPException(status_code=502)
+        
+        # Fundamental Info fetch
+        info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=15.0)
+        
+        # Clean up info for the frontend
+        return {
+            "ticker": ticker.upper(),
+            "name": info.get("longName", ticker.upper()),
+            "sector": info.get("sector", "N/A"),
+            "industry": info.get("industry", "N/A"),
+            "summary": info.get("longBusinessSummary", "No summary available."),
+            "stats": {
+                "Market Cap": info.get("marketCap"),
+                "Enterprise Value": info.get("enterpriseValue"),
+                "P/E Ratio": info.get("trailingPE"),
+                "Forward P/E": info.get("forwardPE"),
+                "Dividend Yield": info.get("dividendYield"),
+                "Beta": info.get("beta"),
+                "52W High": info.get("fiftyTwoWeekHigh"),
+                "52W Low": info.get("fiftyTwoWeekLow"),
+                "Avg Volume": info.get("averageVolume"),
+                "Total Revenue": info.get("totalRevenue"),
+                "EBITDA": info.get("ebitda"),
+                "Profit Margin": info.get("profitMargins"),
+            },
+            "history": history
+        }
+    except Exception as e:
+        logger.error(f"Details failed for {ticker}: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch ticker details")
 
 if __name__ == "__main__":
     import uvicorn
