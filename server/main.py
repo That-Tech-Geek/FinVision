@@ -59,13 +59,21 @@ try:
             db = AsyncClient(project=service_account_info.get('project_id', PROJECT_ID))
             logger.info("Firestore initialized with Service Account JSON string")
         else:
-            # Fallback to ADC
-            db = AsyncClient(project=PROJECT_ID)
-            if not firebase_admin._apps:
-                firebase_admin.initialize_app()
-            logger.info(f"Firestore initialized with ADC for project: {PROJECT_ID}")
+            if os.getenv("USE_ADC") == "true":
+                db = AsyncClient(project=PROJECT_ID)
+                if not firebase_admin._apps:
+                    firebase_admin.initialize_app()
+                logger.info(f"Firestore initialized with ADC for project: {PROJECT_ID}")
+            else:
+                logger.warning("No Firebase credentials found. Firestore Disabled.")
+                db = None
 except Exception as e:
     logger.error(f"Critical: Could not initialize Firebase: {e}")
+    db = None
+
+# Force disable DB if no service account and no ADC found
+if not os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") and not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+    logger.warning("No Firebase credentials found. Running in Market-Only mode (Firestore Disabled).")
     db = None
 
 # --- Ingestion Configuration ---
@@ -95,15 +103,24 @@ sentiment_processor = SentimentProcessor()
 async def lifespan(app: FastAPI):
     global ingestion_engine
     # Startup
-    if db:
-        ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
-        asyncio.create_task(ingestion_engine.start())
-        logger.info(f"Ingestion Engine started with {len(FINNHUB_KEYS)} Finnhub keys")
+    try:
+        if db:
+            ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
+            asyncio.create_task(ingestion_engine.start())
+            logger.info(f"Ingestion Engine started with {len(FINNHUB_KEYS)} Finnhub keys")
+        else:
+            logger.warning("Firestore not connected. Ingestion Engine will not start.")
+    except Exception as e:
+        logger.error(f"Failed to start Ingestion Engine: {e}")
+        
     yield
     # Shutdown
     if ingestion_engine:
-        ingestion_engine.stop()
-        logger.info("Ingestion Engine stopped")
+        try:
+            ingestion_engine.stop()
+            logger.info("Ingestion Engine stopped")
+        except:
+            pass
 
 app = FastAPI(title="FinVision Sentiment Engine", lifespan=lifespan)
 
@@ -386,26 +403,26 @@ async def get_ticker_quote(ticker: str):
     
     try:
         t = yf.Ticker(yf_ticker)
-        # fast fetch for latest price
-        data = await asyncio.to_thread(lambda: t.fast_info)
-        return {
-            "ticker": ticker,
-            "price": round(data['last_price'], 2),
-            "change": round(data.get('year_change', 0), 2), # Using year_change as placeholder if day_change not available
-            "currency": data.get('currency', 'USD')
-        }
-    except Exception as e:
-        logger.error(f"Quote failed for {ticker}: {e}")
-        # Fallback to history if fast_info fails
+        # fast fetch for latest price with timeout
         try:
-            t = yf.Ticker(yf_ticker)
-            hist = await asyncio.to_thread(lambda: t.history(period="1d"))
+            data = await asyncio.wait_for(asyncio.to_thread(lambda: t.fast_info), timeout=10.0)
+            return {
+                "ticker": ticker,
+                "price": round(data['last_price'], 2),
+                "change": round(data.get('year_change', 0), 2),
+                "currency": data.get('currency', 'USD')
+            }
+        except asyncio.TimeoutError:
+            logger.warning(f"Fast info timed out for {ticker}")
+            # Fallback to history
+            hist = await asyncio.wait_for(asyncio.to_thread(lambda: t.history(period="1d")), timeout=10.0)
             if not hist.empty:
                 last_price = hist['Close'].iloc[-1]
                 return {"ticker": ticker, "price": round(last_price, 2), "status": "fallback"}
-        except:
-            pass
-        raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=504, detail="Yahoo Finance timed out")
+    except Exception as e:
+        logger.error(f"Quote failed for {ticker}: {e}")
+        raise HTTPException(status_code=502, detail=f"Market data fetch failed: {str(e)}")
 
 @api_router.get("/ticker/{ticker}")
 async def get_ticker_details(ticker: str, period: str = "5y"):
@@ -417,7 +434,12 @@ async def get_ticker_details(ticker: str, period: str = "5y"):
     
     try:
         t = yf.Ticker(yf_ticker)
-        hist = await asyncio.to_thread(lambda: t.history(period=period))
+        # Fetch history with timeout
+        try:
+            hist = await asyncio.wait_for(asyncio.to_thread(lambda: t.history(period=period)), timeout=15.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="History fetch timed out")
+
         if hist.empty:
             raise HTTPException(status_code=404, detail="No historical data found")
         
@@ -433,7 +455,13 @@ async def get_ticker_details(ticker: str, period: str = "5y"):
                 "volume": int(row['Volume'])
             })
 
-        info = await asyncio.to_thread(lambda: t.info)
+        # Fetch info with timeout
+        try:
+            info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"Info fetch timed out for {ticker}, using defaults")
+            info = {}
+
         return {
             "ticker": ticker,
             "name": info.get("longName", ticker),
@@ -445,9 +473,11 @@ async def get_ticker_details(ticker: str, period: str = "5y"):
             "summary": info.get("longBusinessSummary"),
             "history": history
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch YFinance data for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Market data provider error: {str(e)}")
 
 app.include_router(api_router)
 

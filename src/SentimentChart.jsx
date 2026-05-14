@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 
-const SentimentChart = ({ data, color }) => {
+const SentimentChart = ({ data, priceData, color }) => {
   const chartContainerRef = useRef();
 
   useEffect(() => {
@@ -29,33 +29,40 @@ const SentimentChart = ({ data, color }) => {
       },
       rightPriceScale: {
         borderColor: '#2a2e39',
+        autoScale: true,
       }
     });
 
-    const series = chart.addAreaSeries({
+    // Sentiment Area Series
+    const sentimentSeries = chart.addAreaSeries({
       lineColor: color,
       topColor: `${color}44`,
       bottomColor: `${color}00`,
       lineWidth: 2,
+      title: 'Sentiment',
     });
 
+    // Price Line Series (Secondary Axis overlay)
+    const priceSeries = chart.addLineSeries({
+      color: '#2962ff',
+      lineWidth: 2,
+      lineStyle: 0,
+      title: 'Price ($)',
+      priceScaleId: 'right', // Overlay on the same scale for visual correlation or use separate?
+    });
+
+    // Volume Histogram (Bottom)
     const volumeSeries = chart.addHistogramSeries({
       color: '#26a69a44',
-      priceFormat: {
-          type: 'volume',
-      },
-      priceScaleId: '', // set as overlay
+      priceFormat: { type: 'volume' },
+      priceScaleId: '', 
     });
 
     volumeSeries.priceScale().applyOptions({
-        scaleMargins: {
-            top: 0.8,
-            bottom: 0,
-        },
+        scaleMargins: { top: 0.8, bottom: 0 },
     });
 
-    // Format data for lightweight-charts
-    // data is [{timestamp: 123, score: 0.5, volume: 10}, ...]
+    // Data Transformation
     const lineData = data.map(d => ({
       time: d.timestamp,
       value: d.score
@@ -63,22 +70,31 @@ const SentimentChart = ({ data, color }) => {
 
     const volData = data.map(d => ({
       time: d.timestamp,
-      value: d.volume || 1, // Minimum 1 if entry exists
+      value: d.volume || 1,
       color: d.score >= 0 ? '#08998144' : '#f2364544'
     }));
 
-    series.setData(lineData);
+    sentimentSeries.setData(lineData);
     volumeSeries.setData(volData);
 
-    chart.timeScale().fitContent();
+    // Integrate Price Data if provided
+    if (priceData && priceData.length > 0) {
+      // Map priceData timestamps to match sentiment timestamps roughly or just plot directly
+      const formattedPrice = priceData.map(p => ({
+        time: p.time, // Assuming YFinance uses 'time' as string/timestamp
+        value: p.value
+      }));
+      priceSeries.setData(formattedPrice);
+    }
 
+    chart.timeScale().fitContent();
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, color]);
+  }, [data, priceData, color]);
 
   return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
 };

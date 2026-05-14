@@ -46,7 +46,7 @@ function App() {
       collection(db, "sentimentHistorical"), 
       where("ticker", "==", selectedTicker),
       orderBy("timestamp", "desc"),
-      limit(200)
+      limit(500)
     );
     const unsubHist = onSnapshot(qHist, (snapshot) => {
       const data = snapshot.docs.map(d => ({
@@ -150,6 +150,27 @@ function App() {
     }
   };
 
+  const triggerBulkUpdate = async () => {
+    if (!user) return setError("Please sign in.");
+    setLoading(true);
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const API_URL = import.meta.env.VITE_API_URL || '';
+      await fetch(`${API_URL}/api/v1/sentiment/process-batch`, { 
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tickers: TICKERS })
+      });
+    } catch (err) {
+      setError("Bulk update failed.");
+    } finally {
+      setTimeout(() => setLoading(false), 3000);
+    }
+  };
+
   const getSentimentColor = (score) => {
     if (score > 0.1) return '#089981'; // TV Green
     if (score < -0.1) return '#f23645'; // TV Red
@@ -247,6 +268,18 @@ function App() {
         </div>
       </header>
 
+      {/* Global Controls Overlay */}
+      <div className="global-controls">
+        <button 
+          onClick={triggerBulkUpdate}
+          disabled={loading}
+          className="bulk-refresh-btn"
+        >
+          <RefreshCw size={12} className={loading ? 'spin' : ''} />
+          REFRESH ALL SYMBOLS
+        </button>
+      </div>
+
       <div className="tv-container">
         {/* Watchlist */}
         <aside className="tv-watchlist">
@@ -294,6 +327,7 @@ function App() {
                 >
                   <SentimentChart 
                     data={historicalData} 
+                    priceData={marketData?.history || []}
                     color={getSentimentColor(latestData?.score || 0)} 
                   />
                 </motion.div>
@@ -478,6 +512,35 @@ function App() {
         .stat-row { display: flex; justify-content: space-between; font-size: 12px; }
         .stat-row span:first-child { color: var(--text-secondary); }
         .stat-row span:last-child { color: white; font-weight: 500; }
+        .global-controls {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          z-index: 1000;
+        }
+        .bulk-refresh-btn {
+          background: #2962ff;
+          color: white;
+          border: none;
+          padding: 10px 16px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+          transition: all 0.2s;
+        }
+        .bulk-refresh-btn:hover {
+          transform: translateY(-2px);
+          background: #1e4bd8;
+        }
+        .bulk-refresh-btn:disabled {
+          background: var(--bg-hover);
+          cursor: not-allowed;
+        }
       `}</style>
     </div>
   );
