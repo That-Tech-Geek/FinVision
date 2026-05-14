@@ -1,7 +1,12 @@
 import logging
 import os
+import sys
 import json
 import asyncio
+
+# Ensure local modules are discoverable in Vercel environment
+sys.path.append(os.path.dirname(__file__))
+
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
