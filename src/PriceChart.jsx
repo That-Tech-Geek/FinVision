@@ -7,11 +7,10 @@ const PriceChart = ({ data, ticker }) => {
   useEffect(() => {
     if (!data || data.length === 0) return;
 
-    const handleResize = () => {
-      chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-    };
+    const container = chartContainerRef.current;
+    if (!container) return;
 
-    const chart = createChart(chartContainerRef.current, {
+    const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: '#131722' },
         textColor: '#d1d4dc',
