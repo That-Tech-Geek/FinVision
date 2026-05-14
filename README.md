@@ -1,43 +1,16 @@
-# FinVision: Real-Time Financial Sentiment Engine
+# React + Vite
 
-FinVision is a production-grade financial sentiment analysis platform that ingests data from Reddit, Finnhub, and other social/financial news sources to provide real-time sentiment signals for top-tier assets.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 🚀 Key Features
-- **Real-Time Ingestion**: Dual-layered ingestion (PRAW + Stealth Polling) for Reddit, and WebSocket-based trades/news from Finnhub.
-- **Sentiment Ensemble**: Multi-faceted sentiment analysis using a weighted ensemble of **VADER (60%)** and **TextBlob (40%)**.
-- **Resilient Backend**: FastAPI-based microservice with exponential backoff supervisors, circuit breakers for database writes, and stealth headers for no-auth fallbacks.
-- **Interactive Frontend**: High-fidelity React-based "Terminal" UI with glassmorphism aesthetics and real-time WebSocket updates.
-- **Secure Architecture**: Integrated with Firebase Authentication and Firestore for high-throughput, low-latency storage.
+Currently, two official plugins are available:
 
-## 🏗️ Project Structure
-```text
-FinVision/
-├── backend/            # FastAPI + PRAW + VADER Sentiment Engine
-├── frontend/           # Vite + React + Tailwind + Recharts Dashboard
-├── firestore.rules     # Security rules for sentiment data
-└── README.md
-```
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-## 🛠️ Setup & Installation
+## React Compiler
 
-### Backend
-1. `cd backend`
-2. `pip install -r requirements.txt`
-3. Configure `.env` with:
-   - `FIREBASE_SERVICE_ACCOUNT_PATH`: Path to your JSON credentials.
-   - `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`: From Reddit Apps.
-   - `FINNHUB_API_KEY_1...`: Your Finnhub keys.
-4. `python main.py`
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-### Frontend
-1. `cd frontend`
-2. `npm install`
-3. `npm run dev`
+## Expanding the ESLint configuration
 
-## 📊 Robustness Features
-- **Firestore Circuit Breaker**: Prevents OOM by dropping data if the write queue exceeds 2000 items during network instability.
-- **Reddit Supervisor**: Automatically restarts streams on failure with jittered exponential backoff.
-- **Stealth Polling**: Fallback to public JSON endpoints using browser-grade headers when API keys are exhausted.
-
----
-Developed by **Antigravity** via **Sagan Labs**.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.

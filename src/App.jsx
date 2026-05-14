@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth, googleProvider } from './firebase';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { 
   Activity, Layout, Search, Settings, User, Bell, ChevronDown, 
@@ -72,8 +72,8 @@ function App() {
       setMarketLoading(true);
       try {
         const idToken = await auth.currentUser.getIdToken();
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-        const res = await fetch(`${API_URL}/ticker/${selectedTicker}?period=5y`, {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+        const res = await fetch(`${API_URL}/api/v1/sentiment/ticker/${selectedTicker}?period=5y`, {
           headers: { 'Authorization': `Bearer ${idToken}` }
         });
         if (res.ok) {
@@ -105,8 +105,8 @@ function App() {
     setLoading(true);
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-      await fetch(`${API_URL}/process/${selectedTicker}`, { 
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8085';
+      await fetch(`${API_URL}/api/v1/sentiment/process/${selectedTicker}`, { 
         method: 'POST',
         headers: { 'Authorization': `Bearer ${idToken}` }
       });
@@ -150,10 +150,21 @@ function App() {
             className="flex-center"
             style={{ 
               width: '100%', padding: '12px', background: '#2962ff', color: 'white', 
-              border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
+              border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
+              marginBottom: '10px'
             }}
           >
             Launch Terminal
+          </button>
+          <button 
+            onClick={() => signInAnonymously(auth)}
+            className="flex-center"
+            style={{ 
+              width: '100%', padding: '12px', background: 'transparent', color: 'var(--text-secondary)', 
+              border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
+            }}
+          >
+            Guest Access (Demo)
           </button>
         </motion.div>
       </div>

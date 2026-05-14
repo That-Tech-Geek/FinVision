@@ -338,7 +338,7 @@ def read_root():
     return {
         "status": "online",
         "database": db_status,
-        "engine": "FinVision Sentiment Analyzer",
+        "engine": "FinVision Sentiment Engine",
         "tickers_monitored": TICKERS
     }
 
@@ -354,35 +354,40 @@ def health_check():
         "version": "1.0.0"
     }
 
-@app.post("/process/{ticker}")
+# --- API Router for v1 ---
+from fastapi import APIRouter
+
+api_router = APIRouter(prefix="/api/v1/sentiment")
+
+@api_router.get("/health")
+def api_health():
+    return health_check()
+
+@api_router.post("/process/{ticker}")
 async def process_ticker(ticker: str, background_tasks: BackgroundTasks, user: dict = Depends(verify_token)):
     background_tasks.add_task(process_ticker_logic, ticker)
     return {"message": f"Processing started for {ticker}", "triggered_by": user.get("email")}
 
-@app.post("/process-batch")
+@api_router.post("/process-batch")
 async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks, user: dict = Depends(verify_token)):
     for ticker in batch.tickers:
         background_tasks.add_task(process_ticker_logic, ticker)
     return {"message": f"Processing started for {len(batch.tickers)} tickers", "triggered_by": user.get("email")}
 
-@app.get("/ticker/{ticker}")
+@api_router.get("/ticker/{ticker}")
 async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depends(verify_token)):
     """Fetch multi-year historical data and fundamental info from Yahoo Finance."""
     ticker = ticker.upper().strip()
-    # Handle crypto mapping for yfinance
     yf_ticker = ticker
     if ticker in ["BTC", "ETH", "SOL", "DOGE"]:
         yf_ticker = f"{ticker}-USD"
     
     try:
         t = yf.Ticker(yf_ticker)
-        
-        # 1. Fetch Historical Data (Multi-year)
         hist = await asyncio.to_thread(lambda: t.history(period=period))
         if hist.empty:
             raise HTTPException(status_code=404, detail="No historical data found")
         
-        # Reset index to get dates and format for frontend
         hist_data = hist.reset_index()
         history = []
         for _, row in hist_data.iterrows():
@@ -395,9 +400,7 @@ async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depen
                 "volume": int(row['Volume'])
             })
 
-        # 2. Fetch Fundamental Info
         info = await asyncio.to_thread(lambda: t.info)
-        
         return {
             "ticker": ticker,
             "name": info.get("longName", ticker),
@@ -412,6 +415,8 @@ async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depen
     except Exception as e:
         logger.error(f"Failed to fetch YFinance data for {ticker}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
+
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
