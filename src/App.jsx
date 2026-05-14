@@ -19,63 +19,19 @@ function App() {
   const [command, setCommand] = useState("");
   const [latestData, setLatestData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
-  const [rawMentions, setRawMentions] = useState([]);
   const [newsFeed, setNewsFeed] = useState([]);
   const [marketData, setMarketData] = useState(null);
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('sentiment');
+  const [activeTab, setActiveTab] = useState('market'); // Default to Market for now
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
   
   const commandInputRef = useRef(null);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (!u) signInAnonymously(auth); // Default to anonymous for Guest Access
-    });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    // 1. Listen for Latest Sentiment
-    const qLatest = query(collection(db, "sentimentLatest"), limit(50));
-    const unsubLatest = onSnapshot(qLatest, (snapshot) => {
-      const currentDoc = snapshot.docs.find(d => d.id === selectedTicker);
-      if (currentDoc) setLatestData(currentDoc.data());
-      else setLatestData(null);
-    });
-
-    // 2. Listen for Historical Sentiment (500 pts)
-    const qHist = query(
-      collection(db, "sentimentHistorical"), 
-      where("ticker", "==", selectedTicker),
-      orderBy("timestamp", "desc"),
-      limit(500)
-    );
-    const unsubHist = onSnapshot(qHist, (snapshot) => {
-      const data = snapshot.docs.map(d => ({
-        ...d.data(),
-        timestamp: d.data().timestamp.seconds
-      })).reverse();
-      setHistoricalData(data);
-    });
-
-    // 3. Listen for Raw Mentions
-    const qRaw = query(
-      collection(db, "rawMentions"),
-      where("ticker", "==", selectedTicker),
-      orderBy("timestamp", "desc"),
-      limit(15)
-    );
-    const unsubRaw = onSnapshot(qRaw, (snapshot) => {
-      setRawMentions(snapshot.docs.map(d => d.data()));
-    });
-
-    // 4. Fetch Yahoo Finance
+    // 1. Fetch Yahoo Finance
     const fetchMarketData = async () => {
       setMarketLoading(true);
       try {
@@ -158,9 +114,6 @@ function App() {
     const fallbackInterval = setInterval(pollFallback, 5000);
 
     return () => {
-      unsubLatest();
-      unsubHist();
-      unsubRaw();
       clearInterval(interval);
       clearInterval(fallbackInterval);
     };
@@ -215,7 +168,6 @@ function App() {
   };
 
   const WatchlistItem = ({ ticker, selected, onClick }) => {
-    // Simulated change for visual flavor if live data isn't here yet
     const change = (Math.sin(ticker.charCodeAt(0)) * 1.5).toFixed(2);
     const isUp = parseFloat(change) > 0;
     return (
@@ -230,8 +182,6 @@ function App() {
       </div>
     );
   };
-
-  if (!user) return <div className="flex-center" style={{height:'100vh', background:'#000'}}>Initializing Bloomberg Terminal...</div>;
 
   return (
     <div className="bb-terminal">
@@ -253,9 +203,8 @@ function App() {
           <Settings size={14} color="var(--text-secondary)" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
             <User size={14} />
-            <span>{user.isAnonymous ? 'GUEST' : user.email.split('@')[0]}</span>
+            <span>TERMINAL</span>
           </div>
-          <button className="bb-btn" onClick={() => signOut(auth)}>EXIT</button>
         </div>
       </header>
 
