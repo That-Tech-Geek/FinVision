@@ -28,12 +28,12 @@ const PriceChart = ({ data, ticker }) => {
       },
     });
 
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: false,
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
+    const lineSeries = chart.addLineSeries({
+      color: '#2962ff',
+      lineWidth: 2,
+      priceFormat: {
+        type: 'price',
+      },
     });
 
     const volumeSeries = chart.addHistogramSeries({
@@ -51,19 +51,16 @@ const PriceChart = ({ data, ticker }) => {
       },
     });
 
-    // data format: { time: '2022-01-01', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
-    candlestickSeries.setData(data.map(d => ({
+    // data format: { time: '2022-01-01', value: 105, volume: 1000 }
+    lineSeries.setData(data.map(d => ({
         time: d.time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.value // We use 'value' from backend as close
+        value: d.value
     })));
 
     volumeSeries.setData(data.map(d => ({
         time: d.time,
         value: d.volume,
-        color: d.close >= d.open ? '#26a69a44' : '#ef535044'
+        color: '#26a69a44' // Single color for volume in line chart context or based on prev close
     })));
 
     chart.timeScale().fitContent();

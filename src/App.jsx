@@ -11,6 +11,8 @@ import SentimentChart from './SentimentChart';
 import PriceChart from './PriceChart';
 
 const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH", "SOL", "DOGE"];
+const INDICES = ["^GSPC", "^IXIC", "^DJI", "^VIX", "^RUT", "CL=F", "GC=F"];
+const ALL_WATCHED = [...INDICES, ...TICKERS];
 
 function App() {
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
@@ -175,6 +177,23 @@ function App() {
     return num.toLocaleString();
   };
 
+  const WatchlistItem = ({ ticker, selected, onClick }) => {
+    // Simulated change for visual flavor if live data isn't here yet
+    const change = (Math.sin(ticker.charCodeAt(0)) * 1.5).toFixed(2);
+    const isUp = parseFloat(change) > 0;
+    return (
+      <div 
+        className={`bb-list-item ${selected ? 'active' : ''}`}
+        onClick={onClick}
+      >
+        <span style={{ fontWeight: 600, color: selected ? 'var(--accent-amber)' : 'white' }}>{ticker.replace('^', '')}</span>
+        <span className={isUp ? 'value-up' : 'value-down'} style={{ fontSize: '10px' }}>
+          {isUp ? '▲' : '▼'} {Math.abs(change)}%
+        </span>
+      </div>
+    );
+  };
+
   if (!user) return <div className="flex-center" style={{height:'100vh', background:'#000'}}>Initializing Bloomberg Terminal...</div>;
 
   return (
@@ -205,25 +224,28 @@ function App() {
 
       {/* Watchlist */}
       <aside className="panel bb-watchlist">
-        <div className="section-header">WATCHLIST</div>
+        <div className="section-header">MARKET BENCHMARKS</div>
+        <div style={{ maxHeight: '200px', overflowY: 'auto', borderBottom: '1px solid var(--border-color)' }}>
+          {INDICES.map(ticker => (
+            <WatchlistItem 
+              key={ticker} 
+              ticker={ticker} 
+              selected={selectedTicker === ticker} 
+              onClick={() => setSelectedTicker(ticker)} 
+            />
+          ))}
+        </div>
+        
+        <div className="section-header">EQUITIES & CRYPTO</div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {TICKERS.map(ticker => {
-            const isSelected = selectedTicker === ticker;
-            const change = (Math.sin(ticker.charCodeAt(0)) * 2.5).toFixed(2);
-            const isUp = parseFloat(change) > 0;
-            return (
-              <div 
-                key={ticker} 
-                className={`bb-list-item ${isSelected ? 'active' : ''}`}
-                onClick={() => setSelectedTicker(ticker)}
-              >
-                <span style={{ fontWeight: 600, color: isSelected ? 'var(--accent-amber)' : 'white' }}>{ticker}</span>
-                <span className={isUp ? 'value-up' : 'value-down'}>
-                  {isUp ? '+' : ''}{change}%
-                </span>
-              </div>
-            );
-          })}
+          {TICKERS.map(ticker => (
+            <WatchlistItem 
+              key={ticker} 
+              ticker={ticker} 
+              selected={selectedTicker === ticker} 
+              onClick={() => setSelectedTicker(ticker)} 
+            />
+          ))}
         </div>
       </aside>
 
