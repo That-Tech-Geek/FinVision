@@ -51,23 +51,43 @@ def init_firebase():
     if db: return db
     try:
         PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "finvision-68f62")
-        service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-        if service_account_json:
-            info = json.loads(service_account_json)
-            if "private_key" in info:
-                info["private_key"] = info["private_key"].replace("\\n", "\n")
-            cred = credentials.Certificate(info)
+        # Priority 1: JSON String (Vercel/Cloud)
+        sa_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if sa_json:
+            try:
+                info = json.loads(sa_json)
+                if "private_key" in info:
+                    info["private_key"] = info["private_key"].replace("\\n", "\n")
+                cred = credentials.Certificate(info)
+                if not firebase_admin._apps:
+                    firebase_admin.initialize_app(cred)
+                db = AsyncClient(project=info.get('project_id', PROJECT_ID))
+                logger.info(f"✅ Firestore initialized via JSON (Project: {info.get('project_id')})")
+                return db
+            except Exception as j_err:
+                logger.error(f"❌ JSON SA Parse Failed: {j_err}")
+
+        # Priority 2: File Path (Local)
+        sa_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH")
+        if sa_path and os.path.exists(sa_path):
+            cred = credentials.Certificate(sa_path)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
-            db = AsyncClient(project=info.get('project_id', PROJECT_ID))
-            logger.info("Firestore initialized via JSON")
-        elif os.getenv("USE_ADC") == "true":
+            db = AsyncClient(project=PROJECT_ID)
+            logger.info(f"✅ Firestore initialized via Path: {sa_path}")
+            return db
+
+        # Priority 3: ADC
+        if os.getenv("USE_ADC") == "true":
             db = AsyncClient(project=PROJECT_ID)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app()
-            logger.info("Firestore initialized via ADC")
+            logger.info("✅ Firestore initialized via ADC")
+            return db
+            
+        logger.warning("⚠️ No Firebase credentials found. Sentiment persistence DISABLED.")
     except Exception as e:
-        logger.error(f"Firebase init failed: {e}")
+        logger.error(f"❌ Critical Firebase Failure: {e}")
     return db
 
 # --- Lifespan ---
