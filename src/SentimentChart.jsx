@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 
-const SentimentChart = ({ data, priceData, color }) => {
+const SentimentChart = ({ data, priceData, color, layout }) => {
   const chartContainerRef = useRef();
 
   useEffect(() => {
@@ -97,7 +97,7 @@ const SentimentChart = ({ data, priceData, color }) => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, priceData, color]);
+  }, [data, priceData, color, layout]);
 
   return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
 };

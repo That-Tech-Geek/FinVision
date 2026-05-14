@@ -28,6 +28,11 @@ function App() {
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
   
+  // Layout State
+  const [sidebarWidth, setSidebarWidth] = useState(180);
+  const [detailsWidth, setDetailsWidth] = useState(320);
+  const [mainHeight, setMainHeight] = useState(70); // Percentage for the chart area vs fundamentals
+  
   const commandInputRef = useRef(null);
 
   useEffect(() => {
@@ -199,7 +204,10 @@ function App() {
   };
 
   return (
-    <div className="bb-terminal">
+    <div className="bb-terminal" style={{ 
+        gridTemplateColumns: `${sidebarWidth}px 1fr ${detailsWidth}px`,
+        '--chart-height': `${mainHeight}%`
+    }}>
       {/* Header / Command Bar */}
       <header className="bb-header">
         <Activity size={18} color="var(--accent-amber)" />
@@ -273,15 +281,20 @@ function App() {
         </div>
         
         <div style={{ flex: 1, position: 'relative', background: '#000' }}>
-          {activeTab === 'sentiment' ? (
-             <SentimentChart 
-                data={historicalData} 
-                priceData={marketData?.history || []}
-                color={latestData?.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} 
-              />
-          ) : (
-            <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
-          )}
+           {activeTab === 'sentiment' ? (
+              <SentimentChart 
+                 data={historicalData} 
+                 priceData={marketData?.history || []}
+                 color={latestData?.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} 
+                 layout={{ sidebarWidth, detailsWidth, mainHeight }}
+               />
+           ) : (
+             <PriceChart 
+                data={marketData?.history || []} 
+                ticker={selectedTicker} 
+                layout={{ sidebarWidth, detailsWidth, mainHeight }}
+             />
+           )}
 
           {/* HUD Overlay */}
           <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.8)', padding: '8px', border: '1px solid #333', zIndex: 10 }}>
@@ -361,9 +374,34 @@ function App() {
           <button className="bb-btn" onClick={triggerUpdate} disabled={loading} style={{ color: 'var(--accent-cyan)' }}>
              <RefreshCw size={10} className={loading ? 'spin' : ''} /> FORCE SCAN {selectedTicker}
           </button>
-          <button className="bb-btn" onClick={triggerBulkUpdate} disabled={loading} style={{ color: 'var(--accent-amber)' }}>
-             <RefreshCw size={10} className={loading ? 'spin' : ''} /> SYNC ALL SYMBOLS
-          </button>
+          
+          <div className="layout-controls" style={{ marginTop: '10px', borderTop: '1px solid #222', paddingTop: '10px' }}>
+            <div className="section-header" style={{ color: 'var(--text-dim)', marginBottom: '8px' }}>LAYOUT DIMENSIONS</div>
+            
+            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
+                <span>SIDEBAR</span>
+                <span>{sidebarWidth}px</span>
+              </div>
+              <input type="range" min="150" max="300" value={sidebarWidth} onChange={(e) => setSidebarWidth(parseInt(e.target.value))} className="bb-slider" />
+            </div>
+
+            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
+                <span>DETAILS</span>
+                <span>{detailsWidth}px</span>
+              </div>
+              <input type="range" min="250" max="450" value={detailsWidth} onChange={(e) => setDetailsWidth(parseInt(e.target.value))} className="bb-slider" />
+            </div>
+
+            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
+                <span>CHART RATIO</span>
+                <span>{mainHeight}%</span>
+              </div>
+              <input type="range" min="30" max="85" value={mainHeight} onChange={(e) => setMainHeight(parseInt(e.target.value))} className="bb-slider" />
+            </div>
+          </div>
         </div>
 
         <div className="section-header">REAL-TIME NEWS</div>
@@ -460,6 +498,38 @@ function App() {
         .status-dot.amber { background: var(--accent-amber); box-shadow: 0 0 5px var(--accent-amber); }
         .live-badge { background: var(--accent-amber); color: #000; padding: 0 10px; font-weight: 900; font-size: 10px; height: 100%; display: flex; align-items: center; }
         .status-clock { padding: 0 12px; color: var(--accent-amber); font-weight: 700; font-family: monospace; font-size: 11px; }
+
+        .bb-main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .main-chart-area {
+            height: var(--chart-height, 70%);
+            position: relative;
+            background: #000;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .fundamentals-panel {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .bb-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #222;
+            outline: none;
+            cursor: pointer;
+        }
+        .bb-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 10px;
+            height: 10px;
+            background: var(--accent-amber);
+            border-radius: 50%;
+            cursor: pointer;
+        }
       `}</style>
     </div>
   );

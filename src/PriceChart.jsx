@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 
-const PriceChart = ({ data, ticker }) => {
+const PriceChart = ({ data, ticker, layout }) => {
   const chartContainerRef = useRef();
 
   useEffect(() => {
@@ -74,7 +74,7 @@ const PriceChart = ({ data, ticker }) => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, ticker]);
+  }, [data, ticker, layout]);
 
   return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
 };
