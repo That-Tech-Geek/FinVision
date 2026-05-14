@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+google-cloud-firestore
+yfinance
+textblob
+pydantic
+requests
+python-dateutil
+firebase-admin
+vaderSentiment
+websockets
+httpx
+praw
+python-dotenv
