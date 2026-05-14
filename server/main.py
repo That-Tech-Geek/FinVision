@@ -383,15 +383,15 @@ def api_health():
     return health_check()
 
 @api_router.post("/process/{ticker}")
-async def process_ticker(ticker: str, background_tasks: BackgroundTasks, user: dict = Depends(verify_token)):
+async def process_ticker(ticker: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(process_ticker_logic, ticker)
-    return {"message": f"Processing started for {ticker}", "triggered_by": user.get("email")}
+    return {"message": f"Processing started for {ticker}", "triggered_by": "guest"}
 
 @api_router.post("/process-batch")
-async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks, user: dict = Depends(verify_token)):
+async def process_batch(batch: TickerBatch, background_tasks: BackgroundTasks):
     for ticker in batch.tickers:
         background_tasks.add_task(process_ticker_logic, ticker)
-    return {"message": f"Processing started for {len(batch.tickers)} tickers", "triggered_by": user.get("email")}
+    return {"message": f"Processing started for {len(batch.tickers)} tickers", "triggered_by": "guest"}
 
 @api_router.get("/quote/{ticker}")
 async def get_ticker_quote(ticker: str):

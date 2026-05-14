@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db, auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { 
-  Activity, Layout, Search, Settings, User, Bell, ChevronDown, 
-  TrendingUp, TrendingDown, BarChart2, MessageSquare, Info, 
-  RefreshCw, LogOut, Globe, Shield, Clock, Landmark, DollarSign
+  Activity, Search, Settings, User, Bell, ChevronDown, 
+  TrendingUp, TrendingDown, RefreshCw, LogOut, Info, Clock, Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SentimentChart from './SentimentChart';
 import PriceChart from './PriceChart';
 
-const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH", "SOL"];
+const TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH", "SOL", "DOGE"];
 
 function App() {
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
+  const [command, setCommand] = useState("");
   const [latestData, setLatestData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
   const [rawMentions, setRawMentions] = useState([]);
@@ -23,17 +23,22 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('sentiment'); // sentiment, market
+  const [activeTab, setActiveTab] = useState('sentiment');
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
+  
+  const commandInputRef = useRef(null);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) signInAnonymously(auth); // Default to anonymous for Guest Access
+    });
     return () => unsubAuth();
   }, []);
 
   useEffect(() => {
-    // 1. Listen for Latest Sentiment (Public)
+    // 1. Listen for Latest Sentiment
     const qLatest = query(collection(db, "sentimentLatest"), limit(50));
     const unsubLatest = onSnapshot(qLatest, (snapshot) => {
       const currentDoc = snapshot.docs.find(d => d.id === selectedTicker);
@@ -41,7 +46,7 @@ function App() {
       else setLatestData(null);
     });
 
-    // 2. Listen for Historical Sentiment (Public)
+    // 2. Listen for Historical Sentiment (500 pts)
     const qHist = query(
       collection(db, "sentimentHistorical"), 
       where("ticker", "==", selectedTicker),
@@ -56,47 +61,36 @@ function App() {
       setHistoricalData(data);
     });
 
-    // 3. Listen for Raw Mentions (Public)
+    // 3. Listen for Raw Mentions
     const qRaw = query(
       collection(db, "rawMentions"),
       where("ticker", "==", selectedTicker),
       orderBy("timestamp", "desc"),
-      limit(10)
+      limit(15)
     );
     const unsubRaw = onSnapshot(qRaw, (snapshot) => {
       setRawMentions(snapshot.docs.map(d => d.data()));
     });
 
-    // 4. Fetch Yahoo Finance Multi-Year Data (Publicly accessible)
+    // 4. Fetch Yahoo Finance
     const fetchMarketData = async () => {
       setMarketLoading(true);
       try {
-        const idToken = user ? await user.getIdToken() : null;
         const API_URL = import.meta.env.VITE_API_URL || '';
-        const headers = {};
-        if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-
-        const res = await fetch(`${API_URL}/api/v1/sentiment/ticker/${selectedTicker}?period=5y`, {
-          headers
-        });
+        const res = await fetch(`${API_URL}/api/v1/sentiment/ticker/${selectedTicker}?period=5y`);
         if (res.ok) {
           const data = await res.json();
           setMarketData(data);
-        } else {
-          setMarketData(null);
-          setError("Market data unavailable for this ticker.");
         }
       } catch (err) {
-        console.error("Failed to fetch market data:", err);
-        setMarketData(null);
-        setError("Network error fetching market data.");
+        console.error("Market fetch failed:", err);
       } finally {
         setMarketLoading(false);
       }
     };
     fetchMarketData();
 
-    // 5. Polling for Live Price (HFT feel)
+    // 5. Polling for Live Price
     const pollQuote = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
@@ -105,15 +99,15 @@ function App() {
           const data = await res.json();
           setLivePrice(data);
           
-          // Simulate order book based on live price
+          // Simulation logic
           const price = data.price;
-          const newBids = Array.from({length: 5}, (_, i) => ({
-            price: price - (i * 0.01 + Math.random() * 0.005),
-            size: (Math.random() * 100).toFixed(1)
+          const newBids = Array.from({length: 8}, (_, i) => ({
+            price: price - (i * 0.05 + Math.random() * 0.01),
+            size: (Math.random() * 500).toFixed(0)
           }));
-          const newAsks = Array.from({length: 5}, (_, i) => ({
-            price: price + (i * 0.01 + Math.random() * 0.005),
-            size: (Math.random() * 100).toFixed(1)
+          const newAsks = Array.from({length: 8}, (_, i) => ({
+            price: price + (i * 0.05 + Math.random() * 0.01),
+            size: (Math.random() * 500).toFixed(0)
           })).reverse();
           setOrderBook({ bids: newBids, asks: newAsks });
         }
@@ -123,7 +117,7 @@ function App() {
     };
     
     pollQuote();
-    const interval = setInterval(pollQuote, 10000); // 10s polling for "live" feel
+    const interval = setInterval(pollQuote, 10000);
 
     return () => {
       unsubLatest();
@@ -131,37 +125,39 @@ function App() {
       unsubRaw();
       clearInterval(interval);
     };
-  }, [selectedTicker, user]);
+  }, [selectedTicker]);
+
+  const handleCommand = (e) => {
+    if (e.key === 'Enter') {
+      const parts = command.toUpperCase().split(' ');
+      if (parts[0] === 'GO' && parts[1]) {
+        setSelectedTicker(parts[1]);
+      } else if (TICKERS.includes(parts[0])) {
+        setSelectedTicker(parts[0]);
+      }
+      setCommand("");
+    }
+  };
 
   const triggerUpdate = async () => {
-    if (!user) return setError("Please sign in.");
     setLoading(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
       const API_URL = import.meta.env.VITE_API_URL || '';
-      await fetch(`${API_URL}/api/v1/sentiment/process/${selectedTicker}`, { 
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${idToken}` }
-      });
+      await fetch(`${API_URL}/api/v1/sentiment/process/${selectedTicker}`, { method: 'POST' });
     } catch (err) {
-      setError("Update failed. Check console.");
+      setError("Update failed.");
     } finally {
       setTimeout(() => setLoading(false), 2000);
     }
   };
 
   const triggerBulkUpdate = async () => {
-    if (!user) return setError("Please sign in.");
     setLoading(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
       const API_URL = import.meta.env.VITE_API_URL || '';
       await fetch(`${API_URL}/api/v1/sentiment/process-batch`, { 
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickers: TICKERS })
       });
     } catch (err) {
@@ -169,12 +165,6 @@ function App() {
     } finally {
       setTimeout(() => setLoading(false), 3000);
     }
-  };
-
-  const getSentimentColor = (score) => {
-    if (score > 0.1) return '#089981'; // TV Green
-    if (score < -0.1) return '#f23645'; // TV Red
-    return '#2962ff'; // TV Blue
   };
 
   const formatLargeNumber = (num) => {
@@ -185,366 +175,190 @@ function App() {
     return num.toLocaleString();
   };
 
-  if (!user) {
-    return (
-      <div className="tv-app flex-center" style={{ background: '#0a0a0c' }}>
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel" 
-          style={{ maxWidth: '400px', textAlign: 'center', padding: '3rem' }}
-        >
-          <Activity size={48} color="#2962ff" style={{ margin: '0 auto 1.5rem' }} />
-          <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>FinVision Terminal</h1>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '14px' }}>
-            Enterprise Sentiment Intelligence for modern markets.
-          </p>
-          <button 
-            onClick={() => signInWithPopup(auth, googleProvider)}
-            className="flex-center"
-            style={{ 
-              width: '100%', padding: '12px', background: '#2962ff', color: 'white', 
-              border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
-              marginBottom: '10px'
-            }}
-          >
-            Launch Terminal
-          </button>
-          <button 
-            onClick={() => signInAnonymously(auth)}
-            className="flex-center"
-            style={{ 
-              width: '100%', padding: '12px', background: 'transparent', color: 'var(--text-secondary)', 
-              border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
-            }}
-          >
-            Guest Access (Demo)
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
+  if (!user) return <div className="flex-center" style={{height:'100vh', background:'#000'}}>Initializing Bloomberg Terminal...</div>;
 
   return (
-    <div className="tv-app">
-      {/* Header */}
-      <header className="tv-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <Activity size={20} color="#2962ff" />
-          <span style={{ fontWeight: 700, fontSize: '14px', letterSpacing: '0.5px' }}>FINVISION</span>
-          <div style={{ width: '1px', height: '20px', background: 'var(--border-color)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <span className="token-badge">{selectedTicker}</span>
-            <ChevronDown size={14} color="var(--text-secondary)" />
+    <div className="bb-terminal">
+      {/* Header / Command Bar */}
+      <header className="bb-header">
+        <Activity size={18} color="var(--accent-amber)" />
+        <span style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>FINVISION</span>
+        <input 
+          ref={commandInputRef}
+          type="text" 
+          className="command-bar" 
+          placeholder="TYPE TICKER OR COMMAND (e.g. AAPL, GO BTC)"
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={handleCommand}
+        />
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <Bell size={14} color="var(--text-secondary)" />
+          <Settings size={14} color="var(--text-secondary)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
+            <User size={14} />
+            <span>{user.isAnonymous ? 'GUEST' : user.email.split('@')[0]}</span>
           </div>
-          <div style={{ display: 'flex', gap: '4px', marginLeft: '12px' }}>
-            <button 
-              className={`tab-btn ${activeTab === 'sentiment' ? 'active' : ''}`}
-              onClick={() => setActiveTab('sentiment')}
-            >
-              Sentiment
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'market' ? 'active' : ''}`}
-              onClick={() => setActiveTab('market')}
-            >
-              Market
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '12px' }}>
-            <div className="live-indicator" />
-            LIVE DATA
-          </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Bell size={18} color="var(--text-secondary)" />
-            <Settings size={18} color="var(--text-secondary)" />
-            <div onClick={() => signOut(auth)} style={{ cursor: 'pointer' }}>
-              <LogOut size={18} color="var(--accent-red)" />
-            </div>
-          </div>
+          <button className="bb-btn" onClick={() => signOut(auth)}>EXIT</button>
         </div>
       </header>
 
-      {/* Global Controls Overlay */}
-      <div className="global-controls">
-        <button 
-          onClick={triggerBulkUpdate}
-          disabled={loading}
-          className="bulk-refresh-btn"
-        >
-          <RefreshCw size={12} className={loading ? 'spin' : ''} />
-          REFRESH ALL SYMBOLS
-        </button>
-      </div>
-
-      <div className="tv-container">
-        {/* Watchlist */}
-        <aside className="tv-watchlist">
-          <div className="watchlist-header">
-            <span>Watchlist</span>
-            <Search size={14} color="var(--text-secondary)" />
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {TICKERS.map(ticker => {
-              const isSelected = selectedTicker === ticker;
-              // Simulate some real-ish variation based on index if no real watchlist data yet
-              const change = (Math.sin(ticker.charCodeAt(0)) * 2).toFixed(2);
-              const isUp = parseFloat(change) > 0;
-              
-              return (
-                <div 
-                  key={ticker} 
-                  className={`watchlist-item ${isSelected ? 'active' : ''}`}
-                  onClick={() => setSelectedTicker(ticker)}
-                >
-                  <span style={{ fontWeight: 600 }}>{ticker}</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className={isUp ? 'price-up' : 'price-down'}>
-                      {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                      <span style={{ marginLeft: '4px' }}>{Math.abs(change)}%</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        {/* Main Chart Area */}
-        <main className="tv-main">
-          <div style={{ flex: 1, position: 'relative' }}>
-            <AnimatePresence mode="wait">
-              {activeTab === 'sentiment' ? (
-                <motion.div 
-                  key="sentiment"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  style={{ height: '100%' }}
-                >
-                  <SentimentChart 
-                    data={historicalData} 
-                    priceData={marketData?.history || []}
-                    color={getSentimentColor(latestData?.score || 0)} 
-                  />
-                </motion.div>
-              ) : (
-                <motion.div 
-                  key="market"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  style={{ height: '100%', position: 'relative' }}
-                >
-                  {marketLoading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-secondary)' }}>
-                      <RefreshCw size={24} className="spin" style={{ marginRight: '8px' }} />
-                      Loading Market Data...
-                    </div>
-                  ) : (
-                    <PriceChart 
-                      data={marketData?.history || []} 
-                      ticker={selectedTicker}
-                    />
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          
-          {/* Legend Overlay */}
-          <div style={{ position: 'absolute', top: '20px', left: '20px', pointerEvents: 'none', zIndex: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-              <h2 style={{ fontSize: '32px', fontWeight: 700, margin: 0 }}>{marketData?.name || selectedTicker}</h2>
-              <div style={{ fontSize: '24px', fontWeight: 600, color: 'white' }}>
-                {livePrice ? `$${livePrice.price.toLocaleString()}` : '...'}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              <span style={{ color: getSentimentColor(latestData?.score || 0), fontWeight: 600 }}>
-                SENTIMENT: {latestData?.score.toFixed(3) || 'N/A'}
-              </span>
-              {marketData && (
-                <>
-                  <span>SECTOR: {marketData.sector}</span>
-                  <span>INDUSTRY: {marketData.industry}</span>
-                </>
-              )}
-            </div>
-          </div>
-        </main>
-
-        {/* Right Details Panel */}
-        <aside className="tv-details">
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
-              Sentiment Analysis
-              <Info size={14} color="var(--text-secondary)" />
-            </h3>
-            
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '48px', fontWeight: 700, color: getSentimentColor(latestData?.score || 0) }}>
-                {latestData ? latestData.score.toFixed(3) : '0.000'}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '-4px' }}>
-                AGGREGATED SCORE
-              </div>
-            </div>
-
-            <div className="sentiment-gauge">
+      {/* Watchlist */}
+      <aside className="panel bb-watchlist">
+        <div className="section-header">WATCHLIST</div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {TICKERS.map(ticker => {
+            const isSelected = selectedTicker === ticker;
+            const change = (Math.sin(ticker.charCodeAt(0)) * 2.5).toFixed(2);
+            const isUp = parseFloat(change) > 0;
+            return (
               <div 
-                className="sentiment-pointer" 
-                style={{ 
-                  left: `${(( (latestData?.score || 0) + 1) / 2) * 100}%`,
-                  borderColor: getSentimentColor(latestData?.score || 0)
-                }} 
-              />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-              <span>BEARISH</span>
-              <span>NEUTRAL</span>
-              <span>BULLISH</span>
-            </div>
+                key={ticker} 
+                className={`bb-list-item ${isSelected ? 'active' : ''}`}
+                onClick={() => setSelectedTicker(ticker)}
+              >
+                <span style={{ fontWeight: 600, color: isSelected ? 'var(--accent-amber)' : 'white' }}>{ticker}</span>
+                <span className={isUp ? 'value-up' : 'value-down'}>
+                  {isUp ? '+' : ''}{change}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
 
-            <button 
-              onClick={triggerUpdate}
-              disabled={loading}
-              style={{ 
-                width: '100%', marginTop: '24px', padding: '10px', background: 'var(--bg-hover)', 
-                border: '1px solid var(--border-color)', color: 'white', borderRadius: '4px',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-              }}
+      {/* Main Analysis Area */}
+      <main className="panel bb-main" style={{ borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)' }}>
+        <div className="bb-header" style={{ borderBottom: '1px solid var(--border-color)', height: '32px', background: '#050505' }}>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <span 
+              className={activeTab === 'sentiment' ? 'value-neutral' : ''} 
+              style={{ cursor: 'pointer', fontWeight: 700 }}
+              onClick={() => setActiveTab('sentiment')}
             >
-              <RefreshCw size={14} className={loading ? 'spin' : ''} />
-              {loading ? 'ANALYZING...' : 'FORCE RE-SCAN'}
-            </button>
+              1) SENTIMENT
+            </span>
+            <span 
+              className={activeTab === 'market' ? 'value-neutral' : ''} 
+              style={{ cursor: 'pointer', fontWeight: 700 }}
+              onClick={() => setActiveTab('market')}
+            >
+              2) MARKET
+            </span>
           </div>
+          <div style={{ flex: 1, textAlign: 'right', fontSize: '10px', color: 'var(--text-secondary)' }}>
+            {selectedTicker} {marketData?.name} | {marketData?.sector}
+          </div>
+        </div>
+        
+        <div style={{ flex: 1, position: 'relative', background: '#000' }}>
+          {activeTab === 'sentiment' ? (
+             <SentimentChart 
+                data={historicalData} 
+                priceData={marketData?.history || []}
+                color={latestData?.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} 
+              />
+          ) : (
+            <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
+          )}
 
-          {/* HFT Order Book */}
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)' }}>
-            <h3 style={{ fontSize: '12px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              <Activity size={12} /> LIVE ORDER BOOK
-            </h3>
-            <div className="order-book" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-              <div className="asks">
-                {orderBook.asks.map((ask, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#f23645', padding: '1px 0' }}>
-                    <span>{ask.price.toFixed(2)}</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{ask.size}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="spread" style={{ textAlign: 'center', padding: '8px 0', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', margin: '4px 0', fontWeight: 700 }}>
-                {livePrice ? livePrice.price.toFixed(2) : '---'}
-              </div>
-              <div className="bids">
-                {orderBook.bids.map((bid, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: '#089981', padding: '1px 0' }}>
-                    <span>{bid.price.toFixed(2)}</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{bid.size}</span>
-                  </div>
-                ))}
-              </div>
+          {/* HUD Overlay */}
+          <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.6)', padding: '8px', border: '1px solid #333' }}>
+            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-amber)' }}>
+              {livePrice ? `$${livePrice.price.toLocaleString()}` : 'LOADING...'}
+            </div>
+            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+              VOL: {formatLargeNumber(marketData?.marketCap)} | SENT: {(latestData?.score || 0).toFixed(4)}
             </div>
           </div>
+        </div>
+      </main>
 
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Landmark size={14} /> Fundamentals
-            </h3>
-            <div className="stats-grid">
-              <div className="stat-row">
-                <span>Market Cap</span>
-                <span>{formatLargeNumber(marketData?.marketCap)}</span>
-              </div>
-              <div className="stat-row">
-                <span>P/E Ratio</span>
-                <span>{marketData?.peRatio?.toFixed(2) || 'N/A'}</span>
-              </div>
-              <div className="stat-row">
-                <span>Div Yield</span>
-                <span>{marketData?.dividendYield ? `${(marketData.dividendYield * 100).toFixed(2)}%` : 'N/A'}</span>
-              </div>
-            </div>
+      {/* Side Details / Order Book */}
+      <aside className="panel bb-details">
+        <div className="section-header">MARKET DEPTH</div>
+        <div style={{ padding: '8px', fontSize: '10px', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            <span>PRICE</span>
+            <span>SIZE</span>
           </div>
+          <div className="order-book" style={{ fontFamily: 'monospace' }}>
+            {orderBook.asks.map((ask, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-red)' }}>
+                <span>{ask.price.toFixed(2)}</span>
+                <span style={{ color: 'var(--text-dim)' }}>{ask.size}</span>
+              </div>
+            ))}
+            <div style={{ textAlign: 'center', padding: '4px 0', color: 'white', fontWeight: 700, borderTop: '1px solid #333', borderBottom: '1px solid #333', margin: '4px 0' }}>
+              {livePrice?.price.toFixed(2)}
+            </div>
+            {orderBook.bids.map((bid, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-green)' }}>
+                <span>{bid.price.toFixed(2)}</span>
+                <span style={{ color: 'var(--text-dim)' }}>{bid.size}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
-          <div style={{ padding: '20px' }}>
-            <h3 style={{ fontSize: '14px', marginBottom: '16px' }}>Real-time Mentions</h3>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {rawMentions.map((m, i) => (
-                <div key={i} className="mention-card">
-                  <div className="mention-meta">
-                    <span style={{ color: getSentimentColor(m.sentiment_score) }}>
-                      {m.sentiment_score > 0 ? 'Bullish' : 'Bearish'}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={10} /> {new Date(m.timestamp.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </span>
-                  </div>
-                  <p className="mention-text">{m.text.substring(0, 100)}...</p>
-                </div>
-              ))}
+        <div className="section-header" style={{ marginTop: 'auto' }}>CONTROLS</div>
+        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <button className="bb-btn" onClick={triggerUpdate} disabled={loading} style={{ color: 'var(--accent-cyan)' }}>
+             <RefreshCw size={10} className={loading ? 'spin' : ''} /> FORCE SCAN {selectedTicker}
+          </button>
+          <button className="bb-btn" onClick={triggerBulkUpdate} disabled={loading} style={{ color: 'var(--accent-amber)' }}>
+             <RefreshCw size={10} className={loading ? 'spin' : ''} /> SYNC ALL SYMBOLS
+          </button>
+        </div>
+
+        <div className="section-header">NEWS FEED</div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+          {rawMentions.map((m, i) => (
+            <div key={i} style={{ marginBottom: '8px', borderBottom: '1px solid #111', paddingBottom: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)' }}>
+                <span style={{ color: m.sentiment_score > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                  {m.platform.toUpperCase()}
+                </span>
+                <span>{new Date(m.timestamp.seconds * 1000).toLocaleTimeString()}</span>
+              </div>
+              <div style={{ fontSize: '10px', lineHeight: 1.2 }}>{m.text.substring(0, 80)}...</div>
             </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Footer / Ticker */}
+      <footer className="bb-footer">
+        <div style={{ background: 'var(--accent-amber)', color: 'black', padding: '0 8px', fontWeight: 700, height: '100%', display: 'flex', alignItems: 'center' }}>
+          LIVE
+        </div>
+        <div className="ticker-wrap">
+          <div className="ticker-move">
+            {TICKERS.map(t => (
+              <span key={t} className="ticker-item">
+                {t} <span className="value-up">{(Math.random() * 100).toFixed(2)}</span>
+              </span>
+            ))}
+            {/* Repeat for seamless loop */}
+            {TICKERS.map(t => (
+              <span key={t+"_2"} className="ticker-item">
+                {t} <span className="value-up">{(Math.random() * 100).toFixed(2)}</span>
+              </span>
+            ))}
           </div>
-        </aside>
-      </div>
+        </div>
+        <div style={{ padding: '0 12px', color: 'var(--text-secondary)', fontSize: '10px' }}>
+          {new Date().toLocaleTimeString()}
+        </div>
+      </footer>
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
-        .tab-btn {
-          background: transparent;
-          border: none;
-          color: var(--text-secondary);
-          font-size: 12px;
-          font-weight: 600;
-          padding: 4px 8px;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .tab-btn:hover { background: var(--bg-hover); }
-        .tab-btn.active { color: white; background: var(--bg-active); }
-        .stats-grid { display: flex; flex-direction: column; gap: 8px; }
-        .stat-row { display: flex; justify-content: space-between; font-size: 12px; }
-        .stat-row span:first-child { color: var(--text-secondary); }
-        .stat-row span:last-child { color: white; font-weight: 500; }
-        .global-controls {
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          z-index: 1000;
-        }
-        .bulk-refresh-btn {
-          background: #2962ff;
-          color: white;
-          border: none;
-          padding: 10px 16px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: 700;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-          transition: all 0.2s;
-        }
-        .bulk-refresh-btn:hover {
-          transform: translateY(-2px);
-          background: #1e4bd8;
-        }
-        .bulk-refresh-btn:disabled {
-          background: var(--bg-hover);
-          cursor: not-allowed;
-        }
+        .flex-center { display: flex; align-items: center; justify-content: center; }
       `}</style>
     </div>
   );
 }
 
 export default App;
-
