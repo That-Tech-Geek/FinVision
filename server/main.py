@@ -4,8 +4,10 @@ import sys
 import json
 import asyncio
 
-# Ensure local modules are discoverable in Vercel environment
-sys.path.append(os.path.dirname(__file__))
+# Aggressive path resolution for Vercel/Production environments
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
