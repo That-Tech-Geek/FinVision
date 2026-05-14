@@ -415,4 +415,4 @@ async def get_ticker_details(ticker: str, period: str = "5y", user: dict = Depen
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8085)
