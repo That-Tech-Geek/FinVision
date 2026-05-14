@@ -186,7 +186,11 @@ async def get_details(ticker: str):
                 "Dividend Yield": info.get("dividendYield"),
                 "Beta": info.get("beta"),
                 "52W High": info.get("fiftyTwoWeekHigh"),
-                "52W Low": info.get("fiftyTwoWeekLow")
+                "52W Low": info.get("fiftyTwoWeekLow"),
+                "Analyst Target": info.get("targetMeanPrice"),
+                "Recommendation": info.get("recommendationKey", "N/A").upper(),
+                "Short Ratio": info.get("shortRatio"),
+                "Debt/Equity": info.get("debtToEquity")
             },
             "history": history
         }

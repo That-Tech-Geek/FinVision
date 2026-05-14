@@ -381,35 +381,75 @@ function App() {
         </div>
       </aside>
 
-      {/* Footer / Ticker */}
-      <footer className="bb-footer">
-        <div style={{ background: 'var(--accent-amber)', color: 'black', padding: '0 8px', fontWeight: 700, height: '100%', display: 'flex', alignItems: 'center' }}>
-          LIVE
-        </div>
-        <div className="ticker-wrap">
-          <div className="ticker-move">
-            {TICKERS.map(t => (
-              <span key={t} className="ticker-item">
-                {t} <span className="value-up">{(Math.random() * 100).toFixed(2)}</span>
-              </span>
-            ))}
-            {/* Repeat for seamless loop */}
-            {TICKERS.map(t => (
-              <span key={t+"_2"} className="ticker-item">
-                {t} <span className="value-up">{(Math.random() * 100).toFixed(2)}</span>
-              </span>
-            ))}
+      {/* Footer / Ticker & Status Bar */}
+      <div className="bb-terminal-footer">
+        <footer className="bb-footer">
+          <div className="live-badge">LIVE</div>
+          <div className="ticker-wrap">
+            <div className="ticker-move">
+              {[...INDICES, ...TICKERS].map((t, i) => (
+                <span key={i} className="ticker-item">
+                  <span style={{ fontWeight: 800 }}>{t.replace('^', '')}</span>
+                  <span className={i % 2 === 0 ? 'value-up' : 'value-down'} style={{ marginLeft: '4px' }}>
+                    {(Math.random() * 500).toFixed(2)} {(i % 2 === 0 ? '▲' : '▼')}
+                  </span>
+                </span>
+              ))}
+              {/* Duplicate for seamless loop */}
+              {[...INDICES, ...TICKERS].map((t, i) => (
+                <span key={`dup-${i}`} className="ticker-item">
+                  <span style={{ fontWeight: 800 }}>{t.replace('^', '')}</span>
+                  <span className={i % 2 === 0 ? 'value-up' : 'value-down'} style={{ marginLeft: '4px' }}>
+                    {(Math.random() * 500).toFixed(2)} {(i % 2 === 0 ? '▲' : '▼')}
+                  </span>
+                </span>
+              ))}
+            </div>
           </div>
+          <div className="status-clock">
+            {new Date().toISOString().substring(11, 19)} UTC
+          </div>
+        </footer>
+        <div className="status-bar">
+          <div className="status-item"><span className="status-dot green"></span> NETWORK: CONNECTED</div>
+          <div className="status-item"><span className="status-dot amber"></span> DB: {db ? 'ONLINE' : 'FALLBACK'}</div>
+          <div className="status-item"><span className="status-dot green"></span> KEYS: 5 ROTATING</div>
+          <div className="status-item" style={{ marginLeft: 'auto' }}>SESSION: GUEST</div>
         </div>
-        <div style={{ padding: '0 12px', color: 'var(--text-secondary)', fontSize: '10px' }}>
-          {new Date().toLocaleTimeString()}
-        </div>
-      </footer>
+      </div>
 
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spin { animation: spin 1s linear infinite; }
-        .flex-center { display: flex; align-items: center; justify-content: center; }
+        @keyframes ticker {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .ticker-move {
+          display: flex;
+          white-space: nowrap;
+          animation: ticker 30s linear infinite;
+        }
+        .bb-terminal-footer {
+            border-top: 2px solid var(--border-color);
+            background: #000;
+        }
+        .status-bar {
+            height: 20px;
+            background: #0a0a0a;
+            border-top: 1px solid #222;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 20px;
+            font-size: 9px;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        .status-item { display: flex; align-items: center; gap: 5px; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .status-dot.green { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
+        .status-dot.amber { background: var(--accent-amber); box-shadow: 0 0 5px var(--accent-amber); }
+        .live-badge { background: var(--accent-amber); color: #000; padding: 0 10px; font-weight: 900; font-size: 10px; height: 100%; display: flex; align-items: center; }
+        .status-clock { padding: 0 12px; color: var(--accent-amber); font-weight: 700; font-family: monospace; font-size: 11px; }
       `}</style>
     </div>
   );
