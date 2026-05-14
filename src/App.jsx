@@ -111,10 +111,13 @@ function App() {
         }
     };
     
+    pollQuote();
+    const quoteInterval = setInterval(pollQuote, 10000);
+    
     const fallbackInterval = setInterval(pollFallback, 5000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(quoteInterval);
       clearInterval(fallbackInterval);
     };
   }, [selectedTicker]);
