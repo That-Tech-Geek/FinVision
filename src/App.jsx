@@ -20,6 +20,7 @@ function App() {
   const [latestData, setLatestData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
   const [rawMentions, setRawMentions] = useState([]);
+  const [newsFeed, setNewsFeed] = useState([]);
   const [marketData, setMarketData] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -92,7 +93,22 @@ function App() {
     };
     fetchMarketData();
 
-    // 5. Polling for Live Price
+    // 5. Fetch Yahoo News
+    const fetchNews = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || '';
+        const res = await fetch(`${API_URL}/api/v1/sentiment/news/${selectedTicker}`);
+        if (res.ok) {
+          const data = await res.json();
+          setNewsFeed(data);
+        }
+      } catch (err) {
+        console.error("News fetch failed:", err);
+      }
+    };
+    fetchNews();
+
+    // 6. Polling for Live Price
     const pollQuote = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
@@ -118,14 +134,35 @@ function App() {
       }
     };
     
-    pollQuote();
-    const interval = setInterval(pollQuote, 10000);
+    // 7. Fallback Polling (if Firestore is disabled)
+    const pollFallback = async () => {
+        if (historicalData.length > 0) return; // Already have live data
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || '';
+          const res = await fetch(`${API_URL}/api/v1/sentiment/fallback/sentiment/${selectedTicker}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.latest) setLatestData(data.latest);
+            if (data.historical?.length > 0) {
+                setHistoricalData(data.historical.map(d => ({
+                    ...d,
+                    timestamp: typeof d.timestamp === 'string' ? new Date(d.timestamp).getTime() / 1000 : d.timestamp
+                })));
+            }
+          }
+        } catch (err) {
+          console.error("Fallback poll failed:", err);
+        }
+    };
+    
+    const fallbackInterval = setInterval(pollFallback, 5000);
 
     return () => {
       unsubLatest();
       unsubHist();
       unsubRaw();
       clearInterval(interval);
+      clearInterval(fallbackInterval);
     };
   }, [selectedTicker]);
 
@@ -333,19 +370,28 @@ function App() {
           </button>
         </div>
 
-        <div className="section-header">NEWS FEED</div>
+        <div className="section-header">REAL-TIME NEWS</div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-          {rawMentions.map((m, i) => (
-            <div key={i} style={{ marginBottom: '8px', borderBottom: '1px solid #111', paddingBottom: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)' }}>
-                <span style={{ color: m.sentiment_score > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                  {m.platform.toUpperCase()}
-                </span>
-                <span>{new Date(m.timestamp.seconds * 1000).toLocaleTimeString()}</span>
+          {newsFeed.length > 0 ? newsFeed.map((n, i) => (
+            <div key={i} style={{ marginBottom: '12px', borderBottom: '1px solid #111', paddingBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                <span style={{ color: 'var(--accent-amber)' }}>{n.publisher?.toUpperCase() || 'FINANCIAL NEWS'}</span>
+                <span>{new Date(n.providerPublishTime * 1000).toLocaleTimeString()}</span>
               </div>
-              <div style={{ fontSize: '10px', lineHeight: 1.2 }}>{m.text.substring(0, 80)}...</div>
+              <a 
+                href={n.link} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ fontSize: '11px', lineHeight: 1.3, color: 'white', textDecoration: 'none', fontWeight: 500 }}
+              >
+                {n.title}
+              </a>
             </div>
-          ))}
+          )) : (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '10px' }}>
+              NO RECENT NEWS FOR {selectedTicker}
+            </div>
+          )}
         </div>
       </aside>
 

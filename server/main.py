@@ -83,6 +83,13 @@ if not os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") and not os.getenv("GOOGLE_APPL
     logger.warning("No Firebase credentials found. Running in Market-Only mode (Firestore Disabled).")
     db = None
 
+# --- Global In-Memory Cache (Fallback if Firestore is down) ---
+SENTIMENT_CACHE = {
+    "latest": {}, # ticker -> latest_score
+    "historical": {}, # ticker -> list of {score, timestamp}
+    "news": {} # ticker -> list of news items
+}
+
 # --- Ingestion Configuration ---
 TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "BTC", "ETH"]
 
@@ -337,6 +344,19 @@ async def process_ticker_logic(ticker: str):
             # 3. Raw Mentions (Limit for auditing)
             for mention in mentions_to_store[:3]:
                 await ingestion_engine.writer.add(COLLECTION_RAW, None, mention)
+    
+    # Update local cache as fallback
+    SENTIMENT_CACHE["latest"][ticker] = {"ticker": ticker, "score": avg_score, "timestamp": timestamp_now}
+    if ticker not in SENTIMENT_CACHE["historical"]:
+        SENTIMENT_CACHE["historical"][ticker] = []
+    SENTIMENT_CACHE["historical"][ticker].append({
+        "ticker": ticker,
+        "score": avg_score,
+        "timestamp": timestamp_now,
+        "volume": len(all_sentiments)
+    })
+    # Keep only last 500
+    SENTIMENT_CACHE["historical"][ticker] = SENTIMENT_CACHE["historical"][ticker][-500:]
                 
             logger.info(f"✅ Queued update for {ticker} via BatchedWriter: Score={avg_score:.4f}")
         else:
@@ -430,6 +450,28 @@ async def get_ticker_quote(ticker: str):
     except Exception as e:
         logger.error(f"Quote failed for {ticker}: {e}")
         raise HTTPException(status_code=502, detail=f"Market data fetch failed: {str(e)}")
+
+@api_router.get("/news/{ticker}")
+async def get_ticker_news(ticker: str):
+    """Fetch the latest news for a ticker."""
+    ticker = ticker.upper().strip()
+    try:
+        t = yf.Ticker(ticker)
+        # News is usually fast, but let's add a timeout
+        news = await asyncio.wait_for(asyncio.to_thread(lambda: t.news), timeout=10.0)
+        return news
+    except Exception as e:
+        logger.error(f"News fetch failed for {ticker}: {e}")
+        return []
+
+@api_router.get("/fallback/sentiment/{ticker}")
+async def get_fallback_sentiment(ticker: str):
+    """Fetch sentiment from in-memory cache if Firestore is not connected."""
+    ticker = ticker.upper().strip()
+    return {
+        "latest": SENTIMENT_CACHE["latest"].get(ticker),
+        "historical": SENTIMENT_CACHE["historical"].get(ticker, [])
+    }
 
 @api_router.get("/ticker/{ticker}")
 async def get_ticker_details(ticker: str, period: str = "5y"):
