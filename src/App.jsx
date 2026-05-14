@@ -28,11 +28,6 @@ function App() {
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
   
-  // Layout State
-  const [sidebarWidth, setSidebarWidth] = useState(180);
-  const [detailsWidth, setDetailsWidth] = useState(320);
-  const [mainHeight, setMainHeight] = useState(70); // Percentage for the chart area vs fundamentals
-  
   const commandInputRef = useRef(null);
 
   useEffect(() => {
@@ -204,10 +199,7 @@ function App() {
   };
 
   return (
-    <div className="bb-terminal" style={{ 
-        gridTemplateColumns: `${sidebarWidth}px 1fr ${detailsWidth}px`,
-        '--chart-height': `${mainHeight}%`
-    }}>
+    <div className="bb-terminal">
       {/* Header / Command Bar */}
       <header className="bb-header">
         <Activity size={18} color="var(--accent-amber)" />
@@ -286,13 +278,13 @@ function App() {
                  data={historicalData} 
                  priceData={marketData?.history || []}
                  color={latestData?.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} 
-                 layout={{ sidebarWidth, detailsWidth, mainHeight }}
+                 layout={{ sidebarWidth: 180, detailsWidth: 320, mainHeight: 55 }}
                />
            ) : (
              <PriceChart 
                 data={marketData?.history || []} 
                 ticker={selectedTicker} 
-                layout={{ sidebarWidth, detailsWidth, mainHeight }}
+                layout={{ sidebarWidth: 180, detailsWidth: 320, mainHeight: 55 }}
              />
            )}
 
@@ -315,7 +307,7 @@ function App() {
               {marketData?.stats && Object.entries(marketData.stats).map(([label, value]) => (
                 <div key={label} style={{ background: '#111', padding: '6px', border: '1px solid #222' }}>
                   <div style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{label}</div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>
                     {typeof value === 'number' ? 
                       (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : formatLargeNumber(value)) 
                       : (value || 'N/A')}
@@ -327,7 +319,7 @@ function App() {
           
           <div style={{ width: '300px', borderLeft: '1px solid #222', paddingLeft: '20px' }}>
             <div className="section-header" style={{ marginBottom: '10px' }}>BUSINESS SUMMARY</div>
-            <div style={{ fontSize: '11px', lineHeight: 1.5, color: 'var(--text-secondary)', maxHeight: '150px', overflowY: 'auto' }}>
+            <div style={{ fontSize: '12px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
               {marketData?.summary}
             </div>
             <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
@@ -376,30 +368,10 @@ function App() {
           </button>
           
           <div className="layout-controls" style={{ marginTop: '10px', borderTop: '1px solid #222', paddingTop: '10px' }}>
-            <div className="section-header" style={{ color: 'var(--text-dim)', marginBottom: '8px' }}>LAYOUT DIMENSIONS</div>
-            
-            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
-                <span>SIDEBAR</span>
-                <span>{sidebarWidth}px</span>
-              </div>
-              <input type="range" min="150" max="300" value={sidebarWidth} onChange={(e) => setSidebarWidth(parseInt(e.target.value))} className="bb-slider" />
-            </div>
-
-            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
-                <span>DETAILS</span>
-                <span>{detailsWidth}px</span>
-              </div>
-              <input type="range" min="250" max="450" value={detailsWidth} onChange={(e) => setDetailsWidth(parseInt(e.target.value))} className="bb-slider" />
-            </div>
-
-            <div className="control-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
-                <span>CHART RATIO</span>
-                <span>{mainHeight}%</span>
-              </div>
-              <input type="range" min="30" max="85" value={mainHeight} onChange={(e) => setMainHeight(parseInt(e.target.value))} className="bb-slider" />
+            <div className="section-header" style={{ color: 'var(--text-dim)', marginBottom: '8px' }}>TERMINAL CONTROLS</div>
+            <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+                AUTO-SCALING: ENABLED<br/>
+                VISUAL DENSITY: MAX
             </div>
           </div>
         </div>
@@ -505,7 +477,7 @@ function App() {
             overflow: hidden;
         }
         .main-chart-area {
-            height: var(--chart-height, 70%);
+            height: var(--chart-height, 55%);
             position: relative;
             background: #000;
             border-bottom: 1px solid var(--border-color);
