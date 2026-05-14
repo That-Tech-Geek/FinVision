@@ -10,6 +10,10 @@ const SentimentChart = ({ data, priceData, color }) => {
     const container = chartContainerRef.current;
     if (!container) return;
 
+    const handleResize = () => {
+      chart.applyOptions({ width: container.clientWidth });
+    };
+
     const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: '#131722' },
