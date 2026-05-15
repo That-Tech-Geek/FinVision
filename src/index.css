@@ -49,12 +49,15 @@ body {
   grid-template-areas: 
     "header header header"
     "watchlist chart details"
-    "footer footer footer";
+    "footer footer footer"
+    "status status status";
   grid-template-columns: 240px 1fr 300px;
-  grid-template-rows: 40px 1fr 24px;
+  grid-template-rows: 40px 1fr 24px 20px;
   height: 100vh;
   gap: 1px;
   background-color: var(--border-color);
+  overflow: hidden;
+  max-width: 100vw;
 }
 
 .panel {
@@ -123,9 +126,11 @@ body {
 }
 
 .ticker-wrap {
-  width: 100%;
+  flex: 1;
   overflow: hidden;
   white-space: nowrap;
+  position: relative;
+  min-width: 0;
 }
 
 .ticker-move {
