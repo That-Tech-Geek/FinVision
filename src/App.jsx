@@ -358,14 +358,6 @@ function App() {
         </div>
         <div className="status-clock">{new Date().toISOString().substring(11, 19)} UTC</div>
       </footer>
-      <div className="status-bar">
-        <div className="status-item"><span className="status-indicator green">—</span> NETWORK: CONNECTED</div>
-        <div className="status-item"><span className="status-indicator amber">—</span> ANALYTICS: ACTIVE</div>
-        <div className="status-item"><span className="status-indicator green">—</span> KERNEL: STABLE</div>
-        <div className="status-item" style={{ marginLeft: 'auto' }}>
-          <span className="status-indicator cyan">—</span> FINVISION TERMINAL v2.0
-        </div>
-      </div>
 
       <style>{`
         .bb-content { display: flex; flex: 1; overflow: hidden; }
@@ -401,12 +393,6 @@ function App() {
         .fundamentals-panel { flex: 1; padding: 20px; display: flex; gap: 24px; background: #020202; overflow: hidden; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
-        .status-bar { grid-area: status; border-top: 1px solid #222; background: #050505; height: 20px; display: flex; align-items: center; padding: 0 12px; font-size: 8px; font-weight: 700; gap: 20px; }
-        .status-item { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
-        .status-indicator { font-weight: 800; margin-right: 4px; }
-        .status-indicator.green { color: var(--accent-green); text-shadow: 0 0 5px var(--accent-green); }
-        .status-indicator.amber { color: var(--accent-amber); text-shadow: 0 0 5px var(--accent-amber); }
-        .status-indicator.cyan { color: var(--accent-cyan); text-shadow: 0 0 5px var(--accent-cyan); }
         .status-clock { font-size: 10px; color: var(--text-dim); font-weight: 800; padding: 0 12px; }
       `}</style>
     </div>
