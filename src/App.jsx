@@ -29,6 +29,8 @@ function App() {
   const [activeTab, setActiveTab] = useState('market');
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
+  const [correlation, setCorrelation] = useState(0.0);
+  const [sampleSize, setSampleSize] = useState(0);
   
   const commandInputRef = useRef(null);
 
@@ -69,6 +71,8 @@ function App() {
           const data = await res.json();
           setNewsFeed(data.news || []);
           setSentimentSeries(data.time_series || []);
+          setCorrelation(data.correlation || 0.0);
+          setSampleSize(data.sample_size || 0);
         }
       } catch (err) {
         console.error("News fetch failed:", err);
@@ -233,25 +237,76 @@ function App() {
             </div>
           </div>
           
-          <div className="main-chart-area">
-            <ErrorBoundary>
-              {activeTab === 'sentiment' ? (
-                <SentimentChart data={sentimentSeries} priceData={marketData?.history || []} color={(latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} />
-              ) : (
-                <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
-              )}
-            </ErrorBoundary>
-            <div className="hud-overlay">
-              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-amber)' }}>
-                {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
-              </div>
-              <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | 
-                NEWS SENTIMENT: <span style={{ color: (latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                  {(latestData?.score || 0).toFixed(4)}
-                </span>
+          <div className="main-chart-area" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1.5, position: 'relative' }}>
+              <ErrorBoundary>
+                {activeTab === 'sentiment' ? (
+                  <SentimentChart data={sentimentSeries} priceData={marketData?.history || []} color={(latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} />
+                ) : (
+                  <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
+                )}
+              </ErrorBoundary>
+              <div className="hud-overlay">
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-amber)' }}>
+                  {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | 
+                  NEWS SENTIMENT: <span style={{ color: (latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                    {(latestData?.score || 0).toFixed(4)}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {activeTab === 'sentiment' && (
+              <div style={{ flex: 1, borderTop: '1px solid #222', padding: '12px', background: '#050505', overflow: 'hidden', display: 'flex', gap: '20px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div className="section-header" style={{ marginBottom: '8px' }}>LATEST INTELLIGENCE: {selectedTicker}</div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {newsFeed.map((n, i) => (
+                        <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid #111', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '11px', color: 'white', fontWeight: 600 }}>{n.title}</div>
+                            <div style={{ fontSize: '9px', color: 'var(--text-dim)' }}>{n.publisher} | {n.time}</div>
+                        </div>
+                        <div style={{ width: '80px', textAlign: 'right' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 900, color: (n.sentiment?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            {(n.sentiment?.score || 0) > 0 ? '+' : ''}{(n.sentiment?.score || 0).toFixed(4)}
+                            </span>
+                        </div>
+                        </div>
+                    ))}
+                    </div>
+                </div>
+
+                <div style={{ width: '300px', borderLeft: '1px solid #222', paddingLeft: '20px', display: 'flex', flexDirection: 'column' }}>
+                    <div className="section-header" style={{ marginBottom: '12px' }}>INTELLIGENCE ALIGNMENT</div>
+                    <div style={{ background: '#0a0a0a', padding: '15px', border: '1px solid #1a1a1a', borderRadius: '4px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px' }}>Pearson Correlation (30D)</div>
+                        <div style={{ fontSize: '32px', fontWeight: 900, color: correlation > 0.5 ? 'var(--accent-green)' : (correlation > 0.2 ? 'var(--accent-amber)' : 'var(--text-dim)') }}>
+                            {correlation.toFixed(4)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            {correlation > 0.6 ? 'HIGH POSITIVE ALIGNMENT' : (correlation > 0.3 ? 'MODERATE CORRELATION' : 'NOISY/DECOUPLED')}
+                        </div>
+                    </div>
+                    <div style={{ marginTop: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="stat-card">
+                            <div className="stat-label">SAMPLES</div>
+                            <div className="stat-value">{sampleSize}</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-label">CONFIDENCE</div>
+                            <div className="stat-value">{(sampleSize * Math.abs(correlation) * 10).toFixed(1)}%</div>
+                        </div>
+                    </div>
+                    <div style={{ marginTop: 'auto', fontSize: '9px', color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                        *Correlation measures the linear relationship between daily aggregate sentiment and price returns.
+                    </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="fundamentals-panel">

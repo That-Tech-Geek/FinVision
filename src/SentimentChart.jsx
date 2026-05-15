@@ -97,7 +97,7 @@ const SentimentChart = ({ data, priceData, color }) => {
     try {
       const processed = data
         .map(d => ({
-          time: d.time || d.timestamp,
+          time: d.time || d.timestamp || d.date,
           value: d.value !== undefined ? d.value : d.score
         }))
         .filter(d => d.time && typeof d.value === 'number')

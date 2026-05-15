@@ -15,6 +15,10 @@ import yfinance as yf
 import firebase_admin
 from firebase_admin import credentials
 from google.cloud.firestore import AsyncClient
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+vader_analyzer = SentimentIntensityAnalyzer()
 
 # Aggressive path resolution for Vercel
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -238,35 +242,31 @@ async def get_news(ticker: str):
         if not news_data:
             return {"news": [], "time_series": []}
 
-        # Prepare headlines for bulk analysis
-        headlines = []
+        # Prepare items for bulk analysis
         news_items = []
+        headlines = []
         for n in news_data:
-            title = n.get('title')
-            # Handle nested content structure
-            if not title and "content" in n:
-                title = n["content"].get("title")
-                ts = n["content"].get("pubDate")
-                if ts:
-                    try:
-                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                        publish_time = int(dt.timestamp())
-                    except:
-                        publish_time = n.get('providerPublishTime', 0)
-                else:
-                    publish_time = n.get('providerPublishTime', 0)
-            else:
-                publish_time = n.get('providerPublishTime', 0)
+            content = n.get('content', n)
+            title = content.get('title', content.get('summary', ''))
+            if not title: continue
+            
+            pub_date = content.get('pubDate', content.get('providerPublishTime'))
+            ts = 0
+            if isinstance(pub_date, int): ts = pub_date
+            elif isinstance(pub_date, str):
+                try: ts = datetime.fromisoformat(pub_date.replace('Z', '+00:00')).timestamp()
+                except: ts = datetime.now().timestamp()
+            else: ts = datetime.now().timestamp()
 
-            if title:
-                headlines.append(title)
-                news_items.append({
-                    "title": title,
-                    "publisher": n.get('publisher', 'NEWS'),
-                    "link": n.get('link') or (n.get('content', {}).get('canonicalUrl', {}).get('url')),
-                    "time": datetime.fromtimestamp(publish_time).strftime('%Y-%m-%d %H:%M'),
-                    "timestamp": publish_time
-                })
+            item = {
+                "title": title,
+                "publisher": content.get('provider', {}).get('displayName', n.get('publisher', 'FINANCIAL NEWS')),
+                "link": content.get('canonicalUrl', {}).get('url', n.get('link', '')),
+                "timestamp": ts,
+                "time": datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')
+            }
+            news_items.append(item)
+            headlines.append(title)
 
         # Bulk analyze via sidecar
         analyzed_results = []
@@ -294,32 +294,54 @@ async def get_news(ticker: str):
         # Combine results and group by date
         final_news = []
         date_groups = {}
+        
+        # Fetch historical prices for correlation
+        hist = ticker_obj.history(period="1mo")
+        price_changes = hist['Close'].pct_change().dropna().to_dict()
 
         for i, item in enumerate(news_items):
-            analysis = analyzed_results[i] if i < len(analyzed_results) else {"sentiment": "neutral", "score": 0.5}
-            
-            # Map sentiment to value (case-insensitive)
-            label = analysis['sentiment'].lower()
-            val = 0
-            if label == 'positive': val = 1
-            if label == 'negative': val = -1
-            
-            sentiment_obj = {"score": val * analysis.get('score', 0.5), "label": label}
+            analysis = analyzed_results[i] if i < len(analyzed_results) else {"sentiment": "neutral", "score": 0.0}
+            score = float(analysis.get('score', 0.0))
+            label = analysis.get('sentiment', 'neutral').lower()
+
+            if label == 'neutral' or abs(score) < 0.01:
+                v_score = vader_analyzer.polarity_scores(item['title'])['compound']
+                b_score = TextBlob(item['title']).sentiment.polarity
+                score = (v_score * 0.7) + (b_score * 0.3)
+                label = 'positive' if score > 0.05 else ('negative' if score < -0.05 else 'neutral')
+
+            sentiment_obj = {"score": score, "label": label}
             item["sentiment"] = sentiment_obj
             final_news.append(item)
 
-            # Datewise aggregation
             dt_str = datetime.fromtimestamp(item['timestamp']).strftime('%Y-%m-%d')
             if dt_str not in date_groups:
                 date_groups[dt_str] = {"sum": 0, "count": 0}
-            date_groups[dt_str]["sum"] += sentiment_obj["score"]
+            date_groups[dt_str]["sum"] += score
             date_groups[dt_str]["count"] += 1
 
-        # Generate time series
+        # Generate time series and Correlation
         time_series = []
+        s_vals = []
+        p_vals = []
         for d in sorted(date_groups.keys()):
-            avg = date_groups[d]["sum"] / date_groups[d]["count"]
-            time_series.append({"time": d, "value": round(avg, 4)})
+            avg_s = date_groups[d]["sum"] / date_groups[d]["count"]
+            time_series.append({"time": d, "value": round(avg_s, 4)})
+            for p_date, p_change in price_changes.items():
+                if p_date.strftime('%Y-%m-%d') == d:
+                    s_vals.append(avg_s)
+                    p_vals.append(p_change)
+                    break
+
+        correlation = 0.0
+        if len(s_vals) > 2:
+            try:
+                mean_s = sum(s_vals)/len(s_vals)
+                mean_p = sum(p_vals)/len(p_vals)
+                num = sum((s - mean_s) * (p - mean_p) for s, p in zip(s_vals, p_vals))
+                den = (sum((s - mean_s)**2 for s in s_vals) * sum((p - mean_p)**2 for p in p_vals))**0.5
+                correlation = num / den if den != 0 else 0.0
+            except: correlation = 0.0
 
         # Update global cache for aggregate display
         if final_news:
@@ -333,11 +355,13 @@ async def get_news(ticker: str):
 
         return sanitize({
             "news": final_news,
-            "time_series": time_series
+            "time_series": time_series,
+            "correlation": correlation,
+            "sample_size": len(s_vals)
         })
     except Exception as e:
         logger.error(f"get_news failed for {ticker}: {e}")
-        return {"news": [], "time_series": []}
+        return {"news": [], "time_series": [], "correlation": 0.0, "sample_size": 0}
 
 @app.get("/api/v1/sentiment/fallback/sentiment/{ticker}")
 async def get_fallback(ticker: str):
