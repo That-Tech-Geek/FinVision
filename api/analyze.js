@@ -23,22 +23,32 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { text } = req.body;
+        const { text, headlines } = req.body;
+        
+        if (headlines && Array.isArray(headlines)) {
+            const results = [];
+            for (const h of headlines) {
+                const prediction = await classifier(h);
+                const top = prediction[0];
+                let score = 0;
+                if (top.label === 'positive') score = top.score;
+                else if (top.label === 'negative') score = -top.score;
+                results.push({ sentiment: top.label, score });
+            }
+            return res.status(200).json(results);
+        }
+
         if (!text) {
-             return res.status(400).json({ success: false, error: "Missing text" });
+             return res.status(400).json({ success: false, error: "Missing text or headlines" });
         }
 
         const prediction = await classifier(text);
-
-        // Convert FinBERT labels to scores (-1 to 1)
-        // Labels are usually 'positive', 'negative', 'neutral'
         let score = 0;
         const top = prediction[0];
         if (top.label === 'positive') score = top.score;
         else if (top.label === 'negative') score = -top.score;
-        else score = 0; // neutral
 
-        return res.status(200).json({ success: true, prediction, score });
+        return res.status(200).json({ sentiment: top.label, score });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
     }

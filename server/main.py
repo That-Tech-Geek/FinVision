@@ -92,12 +92,15 @@ async def lifespan(app: FastAPI):
     
     rest_key_rotator = KeyRotator(FINNHUB_KEYS)
 
-    try:
-        ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
-        asyncio.create_task(ingestion_engine.start())
-        logger.info("Ingestion Engine started")
-    except Exception as e:
-        logger.error(f"Ingestion start failed: {e}")
+    if os.getenv("VERCEL") != "1":
+        try:
+            ingestion_engine = IngestionEngine(db, TICKERS, FINNHUB_KEYS)
+            asyncio.create_task(ingestion_engine.start())
+            logger.info("Ingestion Engine started")
+        except Exception as e:
+            logger.error(f"Ingestion start failed: {e}")
+    else:
+        logger.info("Skipping Ingestion Engine on Vercel")
         
     yield
     if ingestion_engine:
@@ -268,13 +271,24 @@ async def get_news(ticker: str):
         # Bulk analyze via sidecar
         analyzed_results = []
         try:
+            # Optimize for Vercel: use VERCEL_URL if available, otherwise local sidecar
+            vercel_url = os.getenv("VERCEL_URL")
+            sidecar_base = f"https://{vercel_url}" if vercel_url else "http://localhost:3001"
+            # On Vercel, the endpoint is /api/analyze (from api/analyze.js)
+            # Locally, it's /analyze (from server.mjs)
+            sidecar_endpoint = f"{sidecar_base}/api/analyze" if vercel_url else f"{sidecar_base}/analyze"
+            
             async with httpx.AsyncClient() as client:
-                resp = await client.post("http://localhost:3001/analyze", json={"headlines": headlines}, timeout=10.0)
+                # Use bulk endpoint with 'headlines'
+                resp = await client.post(sidecar_endpoint, json={"headlines": headlines}, timeout=30.0)
                 if resp.status_code == 200:
                     analyzed_results = resp.json()
+                else:
+                    logger.error(f"Sidecar returned {resp.status_code}: {resp.text}")
+                    analyzed_results = [{"sentiment": "neutral", "score": 0.5} for _ in headlines]
         except Exception as e:
             logger.error(f"Sidecar analysis failed: {e}")
-            # Fallback to neutral
+            # Fallback
             analyzed_results = [{"sentiment": "neutral", "score": 0.5} for _ in headlines]
 
         # Combine results and group by date
