@@ -198,11 +198,27 @@ def sanitize(obj):
     return obj
 
 @app.get("/api/v1/sentiment/ticker/{ticker}")
-async def get_details(ticker: str):
+async def get_details(ticker: str, start: Optional[str] = None, end: Optional[str] = None):
     try:
-        t = yf.Ticker(ticker.upper())
-        hist = await asyncio.to_thread(lambda: t.history(period="5y"))
-        history = [{"time": r['Date'].strftime('%Y-%m-%d'), "value": round(r['Close'], 2), "volume": int(r['Volume'])} for _, r in hist.reset_index().iterrows()]
+        t_symbol = ticker.upper().strip()
+        logger.info(f"Fetching details for {t_symbol} | Range: {start} to {end}")
+        t = yf.Ticker(t_symbol)
+        
+        if start and end and start.strip() and end.strip():
+            hist = await asyncio.to_thread(lambda: t.history(start=start, end=end))
+        else:
+            hist = await asyncio.to_thread(lambda: t.history(period="1mo"))
+            
+        history = []
+        if not hist.empty:
+            for idx, row in hist.iterrows():
+                history.append({
+                    "time": idx.strftime('%Y-%m-%d'),
+                    "value": round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"])
+                })
+        
+        logger.info(f"Retrieved {len(history)} data points for {t_symbol}")
         info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=15.0)
         res_data = {
             "ticker": ticker.upper(),
@@ -375,4 +391,4 @@ async def process_ticker(ticker: str, background_tasks: BackgroundTasks):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8085)
+    uvicorn.run(app, host="0.0.0.0", port=8086)

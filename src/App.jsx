@@ -31,6 +31,7 @@ function App() {
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
   const [correlation, setCorrelation] = useState(0.0);
   const [sampleSize, setSampleSize] = useState(0);
+  const [dateRange, setDateRange] = useState({ start: null, end: null });
   
   const commandInputRef = useRef(null);
 
@@ -45,9 +46,17 @@ function App() {
   useEffect(() => {
     const fetchMarketData = async () => {
       setMarketLoading(true);
+      setMarketData(null); // Clear stale data
+      setHistoricalData([]); // Clear stale chart
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
-        const res = await fetch(`${API_URL}/api/v1/sentiment/ticker/${selectedTicker}?period=5y`);
+        let url = `${API_URL}/api/v1/sentiment/ticker/${selectedTicker}`;
+        if (dateRange.start && dateRange.end) {
+          url += `?start=${dateRange.start}&end=${dateRange.end}`;
+        } else {
+          url += `?period=1mo`;
+        }
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setMarketData(data);
@@ -62,7 +71,9 @@ function App() {
       }
     };
     fetchMarketData();
+  }, [selectedTicker, dateRange]);
 
+  useEffect(() => {
     const fetchNews = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
@@ -81,6 +92,7 @@ function App() {
     fetchNews();
 
     const pollQuote = async () => {
+      if (dateRange.start) return; // Skip polling in historical mode
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
         const res = await fetch(`${API_URL}/api/v1/sentiment/quote/${selectedTicker}`);
@@ -105,6 +117,7 @@ function App() {
     };
     
     const pollFallback = async () => {
+        if (dateRange.start) return; // Skip polling in historical mode
         try {
           const API_URL = import.meta.env.VITE_API_URL || '';
           const res = await fetch(`${API_URL}/api/v1/sentiment/fallback/sentiment/${selectedTicker}`);
@@ -132,16 +145,26 @@ function App() {
       clearInterval(quoteInterval);
       clearInterval(fallbackInterval);
     };
-  }, [selectedTicker]);
+  }, [selectedTicker, dateRange]);
 
   const handleCommand = (e) => {
     if (e.key === 'Enter') {
       const input = command.trim().toUpperCase();
       if (!input) return;
       const parts = input.split(' ');
-      let newTicker = parts[0] === 'GO' ? parts[1] : parts[0];
+      
+      let newTicker = parts[0];
+      let start = null;
+      let end = null;
+      
+      if (parts.length >= 3) {
+        start = parts[1];
+        end = parts[2];
+      }
+      
       if (newTicker) {
         setSelectedTicker(newTicker);
+        setDateRange({ start, end });
         setCommand("");
         setTimeout(() => commandInputRef.current?.focus(), 50);
       }
@@ -247,8 +270,25 @@ function App() {
                 )}
               </ErrorBoundary>
               <div className="hud-overlay">
+                {dateRange.start && (
+                  <div style={{ 
+                    background: 'var(--accent-amber)', 
+                    color: 'black', 
+                    fontSize: '9px', 
+                    fontWeight: 900, 
+                    padding: '2px 6px', 
+                    borderRadius: '2px',
+                    marginBottom: '8px',
+                    display: 'inline-block',
+                    letterSpacing: '1px'
+                  }}>
+                    HISTORICAL RESEARCH MODE: {dateRange.start} TO {dateRange.end}
+                  </div>
+                )}
                 <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-amber)' }}>
-                  {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
+                  {livePrice && !dateRange.start 
+                    ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` 
+                    : (marketData?.history?.[marketData.history.length-1]?.value ? `${getCurrencySymbol(marketData.currency)}${marketData.history[marketData.history.length-1].value}` : 'RESEARCH MODE')}
                 </div>
                 <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>
                   MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | 
