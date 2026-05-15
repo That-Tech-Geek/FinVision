@@ -180,6 +180,16 @@ async def get_quote(ticker: str):
         }
     except: raise HTTPException(status_code=502)
 
+def sanitize(obj):
+    import math
+    if isinstance(obj, dict):
+        return {k: sanitize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize(x) for x in obj]
+    elif isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
 @app.get("/api/v1/sentiment/ticker/{ticker}")
 async def get_details(ticker: str):
     try:
@@ -187,12 +197,15 @@ async def get_details(ticker: str):
         hist = await asyncio.to_thread(lambda: t.history(period="5y"))
         history = [{"time": r['Date'].strftime('%Y-%m-%d'), "value": round(r['Close'], 2), "volume": int(r['Volume'])} for _, r in hist.reset_index().iterrows()]
         info = await asyncio.wait_for(asyncio.to_thread(lambda: t.info), timeout=15.0)
-        return {
+        res_data = {
             "ticker": ticker.upper(),
             "name": info.get("longName", ticker.upper()),
             "sector": info.get("sector", "N/A"),
             "industry": info.get("industry", "N/A"),
-            "currency": info.get("currency", "USD"),
+            "currency": (
+                "INR" if ticker.upper().endswith(".NS") or ticker.upper().endswith(".BO") 
+                else info.get("currency", "USD")
+            ),
             "summary": info.get("longBusinessSummary", "N/A"),
             "stats": {
                 "Market Cap": info.get("marketCap"),
@@ -209,14 +222,108 @@ async def get_details(ticker: str):
             },
             "history": history
         }
+        return sanitize(res_data)
     except: raise HTTPException(status_code=502)
 
 @app.get("/api/v1/sentiment/news/{ticker}")
 async def get_news(ticker: str):
+    ticker = ticker.upper().strip()
     try:
-        t = yf.Ticker(ticker.upper())
-        return await asyncio.wait_for(asyncio.to_thread(lambda: t.news), timeout=10.0)
-    except: return []
+        t = yf.Ticker(ticker)
+        news_data = await asyncio.wait_for(asyncio.to_thread(lambda: t.news), timeout=10.0)
+        
+        if not news_data:
+            return {"news": [], "time_series": []}
+
+        # Prepare headlines for bulk analysis
+        headlines = []
+        news_items = []
+        for n in news_data:
+            title = n.get('title')
+            # Handle nested content structure
+            if not title and "content" in n:
+                title = n["content"].get("title")
+                ts = n["content"].get("pubDate")
+                if ts:
+                    try:
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        publish_time = int(dt.timestamp())
+                    except:
+                        publish_time = n.get('providerPublishTime', 0)
+                else:
+                    publish_time = n.get('providerPublishTime', 0)
+            else:
+                publish_time = n.get('providerPublishTime', 0)
+
+            if title:
+                headlines.append(title)
+                news_items.append({
+                    "title": title,
+                    "publisher": n.get('publisher', 'NEWS'),
+                    "link": n.get('link') or (n.get('content', {}).get('canonicalUrl', {}).get('url')),
+                    "time": datetime.fromtimestamp(publish_time).strftime('%Y-%m-%d %H:%M'),
+                    "timestamp": publish_time
+                })
+
+        # Bulk analyze via sidecar
+        analyzed_results = []
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post("http://localhost:3001/analyze", json={"headlines": headlines}, timeout=10.0)
+                if resp.status_code == 200:
+                    analyzed_results = resp.json()
+        except Exception as e:
+            logger.error(f"Sidecar analysis failed: {e}")
+            # Fallback to neutral
+            analyzed_results = [{"sentiment": "neutral", "score": 0.5} for _ in headlines]
+
+        # Combine results and group by date
+        final_news = []
+        date_groups = {}
+
+        for i, item in enumerate(news_items):
+            analysis = analyzed_results[i] if i < len(analyzed_results) else {"sentiment": "neutral", "score": 0.5}
+            
+            # Map sentiment to value (case-insensitive)
+            label = analysis['sentiment'].lower()
+            val = 0
+            if label == 'positive': val = 1
+            if label == 'negative': val = -1
+            
+            sentiment_obj = {"score": val * analysis.get('score', 0.5), "label": label}
+            item["sentiment"] = sentiment_obj
+            final_news.append(item)
+
+            # Datewise aggregation
+            dt_str = datetime.fromtimestamp(item['timestamp']).strftime('%Y-%m-%d')
+            if dt_str not in date_groups:
+                date_groups[dt_str] = {"sum": 0, "count": 0}
+            date_groups[dt_str]["sum"] += sentiment_obj["score"]
+            date_groups[dt_str]["count"] += 1
+
+        # Generate time series
+        time_series = []
+        for d in sorted(date_groups.keys()):
+            avg = date_groups[d]["sum"] / date_groups[d]["count"]
+            time_series.append({"time": d, "value": round(avg, 4)})
+
+        # Update global cache for aggregate display
+        if final_news:
+            total_score = sum(n["sentiment"]["score"] for n in final_news)
+            avg_score = total_score / len(final_news)
+            now = datetime.now(timezone.utc)
+            SENTIMENT_CACHE["latest"][ticker] = {"ticker": ticker, "score": avg_score, "timestamp": now}
+            if ticker not in SENTIMENT_CACHE["historical"]: SENTIMENT_CACHE["historical"][ticker] = []
+            SENTIMENT_CACHE["historical"][ticker].append({"ticker": ticker, "score": avg_score, "timestamp": now, "volume": len(final_news)})
+            SENTIMENT_CACHE["historical"][ticker] = SENTIMENT_CACHE["historical"][ticker][-500:]
+
+        return sanitize({
+            "news": final_news,
+            "time_series": time_series
+        })
+    except Exception as e:
+        logger.error(f"get_news failed for {ticker}: {e}")
+        return {"news": [], "time_series": []}
 
 @app.get("/api/v1/sentiment/fallback/sentiment/{ticker}")
 async def get_fallback(ticker: str):

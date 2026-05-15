@@ -1,105 +1,160 @@
 import React, { useEffect, useRef, memo } from 'react';
-import { createChart, ColorType } from 'lightweight-charts';
+import * as LightweightCharts from 'lightweight-charts';
 
-const SentimentChart = ({ data, priceData, color, layout }) => {
+const SentimentChart = ({ data, priceData, color }) => {
   const chartContainerRef = useRef();
+  const chartRef = useRef();
+  const sentimentSeriesRef = useRef();
+  const priceSeriesRef = useRef();
+  const volumeSeriesRef = useRef();
 
   useEffect(() => {
-    if (!data || data.length === 0) return;
-
     const container = chartContainerRef.current;
     if (!container) return;
 
-    const handleResize = () => {
-      chart.applyOptions({ width: container.clientWidth });
-    };
+    console.log("Initializing SentimentChart");
+    let chart;
+    try {
+      chart = LightweightCharts.createChart(container, {
+        layout: {
+          background: { type: LightweightCharts.ColorType.Solid, color: '#131722' },
+          textColor: '#d1d4dc',
+        },
+        grid: {
+          vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+          horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+        },
+        width: container.clientWidth || 400,
+        height: container.clientHeight || 300,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: '#2a2e39',
+        },
+        rightPriceScale: {
+          borderColor: '#2a2e39',
+          autoScale: true,
+        }
+      });
 
-    const chart = createChart(container, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#131722' },
-        textColor: '#d1d4dc',
-      },
-      grid: {
-        vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 500,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        borderColor: '#2a2e39',
-      },
-      rightPriceScale: {
-        borderColor: '#2a2e39',
-        autoScale: true,
-      }
-    });
+      const sentimentSeries = chart.addAreaSeries({
+        lineColor: color,
+        topColor: `${color}44`,
+        bottomColor: `${color}00`,
+        lineWidth: 2,
+        title: 'Sentiment',
+      });
 
-    // Sentiment Area Series
-    const sentimentSeries = chart.addAreaSeries({
-      lineColor: color,
-      topColor: `${color}44`,
-      bottomColor: `${color}00`,
-      lineWidth: 2,
-      title: 'Sentiment',
-    });
+      const priceSeries = chart.addLineSeries({
+        color: '#2962ff',
+        lineWidth: 2,
+        lineStyle: 0,
+        title: 'Price',
+      });
 
-    // Price Line Series (Secondary Axis overlay)
-    const priceSeries = chart.addLineSeries({
-      color: '#2962ff',
-      lineWidth: 2,
-      lineStyle: 0,
-      title: 'Price ($)',
-      priceScaleId: 'right', // Overlay on the same scale for visual correlation or use separate?
-    });
+      const volumeSeries = chart.addHistogramSeries({
+        color: '#26a69a44',
+        priceFormat: { type: 'volume' },
+        priceScaleId: '', 
+      });
 
-    // Volume Histogram (Bottom)
-    const volumeSeries = chart.addHistogramSeries({
-      color: '#26a69a44',
-      priceFormat: { type: 'volume' },
-      priceScaleId: '', 
-    });
+      volumeSeries.priceScale().applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+      });
 
-    volumeSeries.priceScale().applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
-    });
-
-    // Data Transformation
-    const lineData = data.map(d => ({
-      time: d.timestamp,
-      value: d.score
-    }));
-
-    const volData = data.map(d => ({
-      time: d.timestamp,
-      value: d.volume || 1,
-      color: d.score >= 0 ? '#08998144' : '#f2364544'
-    }));
-
-    sentimentSeries.setData(lineData);
-    volumeSeries.setData(volData);
-
-    // Integrate Price Data if provided
-    if (priceData && priceData.length > 0) {
-      // Map priceData timestamps to match sentiment timestamps roughly or just plot directly
-      const formattedPrice = priceData.map(p => ({
-        time: p.time, // Assuming YFinance uses 'time' as string/timestamp
-        value: p.value
-      }));
-      priceSeries.setData(formattedPrice);
+      chartRef.current = chart;
+      sentimentSeriesRef.current = sentimentSeries;
+      priceSeriesRef.current = priceSeries;
+      volumeSeriesRef.current = volumeSeries;
+    } catch (e) {
+      console.error("Error creating SentimentChart:", e);
+      return;
     }
 
-    chart.timeScale().fitContent();
-    window.addEventListener('resize', handleResize);
+    const handleResize = () => {
+      if (container && chart) {
+        chart.applyOptions({ 
+          width: container.clientWidth,
+          height: container.clientHeight
+        });
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      chart.remove();
+      console.log("Cleaning up SentimentChart");
+      resizeObserver.disconnect();
+      if (chart) chart.remove();
+      chartRef.current = null;
     };
-  }, [data, priceData, color, layout]);
+  }, []); // Init once
 
-  return <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />;
+  useEffect(() => {
+    if (!chartRef.current || !data || data.length === 0) return;
+
+    try {
+      const processed = data
+        .map(d => ({
+          time: d.time || d.timestamp,
+          value: d.value !== undefined ? d.value : d.score
+        }))
+        .filter(d => d.time && typeof d.value === 'number')
+        .map(d => ({
+          time: typeof d.time === 'string' ? d.time : new Date(d.time).toISOString().split('T')[0],
+          value: d.value
+        }))
+        .sort((a, b) => a.time.localeCompare(b.time));
+
+      const unique = [];
+      const seen = new Set();
+      for (const d of processed) {
+        if (!seen.has(d.time)) {
+          unique.push(d);
+          seen.add(d.time);
+        }
+      }
+
+      if (unique.length > 0) {
+        sentimentSeriesRef.current.setData(unique);
+        sentimentSeriesRef.current.applyOptions({ lineColor: color, topColor: `${color}44` });
+
+        const volData = unique.map(d => ({
+          time: d.time,
+          value: 1,
+          color: d.value >= 0 ? '#08998144' : '#f2364544'
+        }));
+        volumeSeriesRef.current.setData(volData);
+      }
+
+      if (priceData && priceData.length > 0) {
+        const pProcessed = priceData
+          .filter(p => p.time && typeof p.value === 'number')
+          .map(p => ({
+            time: typeof p.time === 'string' ? p.time : new Date(p.time).toISOString().split('T')[0],
+            value: p.value
+          }))
+          .sort((a, b) => a.time.localeCompare(b.time));
+
+        const pUnique = [];
+        const pSeen = new Set();
+        for (const p of pProcessed) {
+          if (!pSeen.has(p.time)) {
+            pUnique.push(p);
+            pSeen.add(p.time);
+          }
+        }
+        priceSeriesRef.current.setData(pUnique);
+      }
+
+      chartRef.current.timeScale().fitContent();
+    } catch (err) {
+      console.error("SentimentChart Data Update Error:", err);
+    }
+  }, [data, priceData, color]);
+
+  return <div ref={chartContainerRef} style={{ width: '100%', height: '100%', position: 'relative', minHeight: '200px' }} />;
 };
 
 export default memo(SentimentChart);

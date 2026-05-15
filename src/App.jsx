@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ErrorBoundary from './ErrorBoundary';
 import { db, auth, googleProvider } from './firebase';
 import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
@@ -20,11 +21,12 @@ function App() {
   const [latestData, setLatestData] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
   const [newsFeed, setNewsFeed] = useState([]);
+  const [sentimentSeries, setSentimentSeries] = useState([]);
   const [marketData, setMarketData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [marketLoading, setMarketLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('market'); // Default to Market for now
+  const [activeTab, setActiveTab] = useState('market');
   const [livePrice, setLivePrice] = useState(null);
   const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
   
@@ -39,7 +41,6 @@ function App() {
   };
 
   useEffect(() => {
-    // 1. Fetch Yahoo Finance
     const fetchMarketData = async () => {
       setMarketLoading(true);
       try {
@@ -48,6 +49,9 @@ function App() {
         if (res.ok) {
           const data = await res.json();
           setMarketData(data);
+          if (data.history) {
+            setHistoricalData(data.history);
+          }
         }
       } catch (err) {
         console.error("Market fetch failed:", err);
@@ -57,14 +61,14 @@ function App() {
     };
     fetchMarketData();
 
-    // 5. Fetch Yahoo News
     const fetchNews = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
         const res = await fetch(`${API_URL}/api/v1/sentiment/news/${selectedTicker}`);
         if (res.ok) {
           const data = await res.json();
-          setNewsFeed(data);
+          setNewsFeed(data.news || []);
+          setSentimentSeries(data.time_series || []);
         }
       } catch (err) {
         console.error("News fetch failed:", err);
@@ -72,7 +76,6 @@ function App() {
     };
     fetchNews();
 
-    // 6. Polling for Live Price
     const pollQuote = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || '';
@@ -81,7 +84,6 @@ function App() {
           const data = await res.json();
           setLivePrice(data);
           
-          // Simulation logic
           const price = data.price;
           const newBids = Array.from({length: 8}, (_, i) => ({
             price: price - (i * 0.05 + Math.random() * 0.01),
@@ -98,19 +100,17 @@ function App() {
       }
     };
     
-    // 7. Fallback Polling (if Firestore is disabled)
     const pollFallback = async () => {
-        if (historicalData.length > 0) return; // Already have live data
         try {
           const API_URL = import.meta.env.VITE_API_URL || '';
           const res = await fetch(`${API_URL}/api/v1/sentiment/fallback/sentiment/${selectedTicker}`);
           if (res.ok) {
             const data = await res.json();
-            if (data.latest) setLatestData(data.latest);
-            if (data.historical?.length > 0) {
+            if (data && data.latest) setLatestData(data.latest);
+            if (data && Array.isArray(data.historical)) {
                 setHistoricalData(data.historical.map(d => ({
                     ...d,
-                    timestamp: typeof d.timestamp === 'string' ? new Date(d.timestamp).getTime() / 1000 : d.timestamp
+                    timestamp: d.timestamp ? (typeof d.timestamp === 'string' ? new Date(d.timestamp).getTime() / 1000 : d.timestamp) : Date.now()/1000
                 })));
             }
           }
@@ -120,8 +120,8 @@ function App() {
     };
     
     pollQuote();
+    pollFallback();
     const quoteInterval = setInterval(pollQuote, 10000);
-    
     const fallbackInterval = setInterval(pollFallback, 5000);
 
     return () => {
@@ -134,21 +134,11 @@ function App() {
     if (e.key === 'Enter') {
       const input = command.trim().toUpperCase();
       if (!input) return;
-
       const parts = input.split(' ');
-      
-      // GO TICKER or just TICKER
-      let newTicker = "";
-      if (parts[0] === 'GO' && parts[1]) {
-        newTicker = parts[1];
-      } else {
-        newTicker = parts[0];
-      }
-
+      let newTicker = parts[0] === 'GO' ? parts[1] : parts[0];
       if (newTicker) {
         setSelectedTicker(newTicker);
         setCommand("");
-        // Focus the input back after a small delay to keep flow
         setTimeout(() => commandInputRef.current?.focus(), 50);
       }
     }
@@ -166,22 +156,6 @@ function App() {
     }
   };
 
-  const triggerBulkUpdate = async () => {
-    setLoading(true);
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || '';
-      await fetch(`${API_URL}/api/v1/sentiment/process-batch`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers: TICKERS })
-      });
-    } catch (err) {
-      setError("Bulk update failed.");
-    } finally {
-      setTimeout(() => setLoading(false), 3000);
-    }
-  };
-
   const formatLargeNumber = (num) => {
     if (!num) return 'N/A';
     if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
@@ -193,12 +167,17 @@ function App() {
   const WatchlistItem = ({ ticker, selected, onClick }) => {
     const change = (Math.sin(ticker.charCodeAt(0)) * 1.5).toFixed(2);
     const isUp = parseFloat(change) > 0;
+    const currency = ticker.endsWith('.NS') || ticker.endsWith('.BO') ? 'INR' : 'USD';
+    const dummyPrice = (100 + Math.random() * 900).toLocaleString(undefined, { minimumFractionDigits: 2 });
+    
     return (
-      <div 
-        className={`bb-list-item ${selected ? 'active' : ''}`}
-        onClick={onClick}
-      >
-        <span style={{ fontWeight: 600, color: selected ? 'var(--accent-amber)' : 'white' }}>{ticker.replace('^', '')}</span>
+      <div className={`bb-list-item ${selected ? 'active' : ''}`} onClick={onClick}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: 600, color: selected ? 'var(--accent-amber)' : 'white' }}>{ticker.replace('^', '')}</span>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+            {getCurrencySymbol(currency)}{dummyPrice}
+          </span>
+        </div>
         <span className={isUp ? 'value-up' : 'value-down'} style={{ fontSize: '10px' }}>
           {isUp ? '▲' : '▼'} {Math.abs(change)}%
         </span>
@@ -208,7 +187,6 @@ function App() {
 
   return (
     <div className="bb-terminal">
-      {/* Header / Command Bar */}
       <header className="bb-header">
         <Activity size={18} color="var(--accent-amber)" />
         <span style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>FINVISION</span>
@@ -216,7 +194,7 @@ function App() {
           ref={commandInputRef}
           type="text" 
           className="command-bar" 
-          placeholder="TYPE TICKER OR COMMAND (e.g. AAPL, GO BTC)"
+          placeholder="TYPE TICKER (e.g. AAPL, RELIANCE.NS)"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={handleCommand}
@@ -224,193 +202,138 @@ function App() {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-cyan)' }}>
             <User size={14} />
-            <span>TERMINAL</span>
+            <span>INSTITUTIONAL</span>
           </div>
         </div>
       </header>
 
-      {/* Watchlist */}
-      <aside className="panel bb-watchlist">
-        <div className="section-header">TRENDING MARKETS</div>
-        <div style={{ maxHeight: '200px', overflowY: 'auto', borderBottom: '1px solid var(--border-color)' }}>
-          {INDICES.map(ticker => (
-            <WatchlistItem 
-              key={ticker} 
-              ticker={ticker} 
-              selected={selectedTicker === ticker} 
-              onClick={() => setSelectedTicker(ticker)} 
-            />
-          ))}
-        </div>
-        
-        <div className="section-header">TRENDING STOCKS</div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {TICKERS.map(ticker => (
-            <WatchlistItem 
-              key={ticker} 
-              ticker={ticker} 
-              selected={selectedTicker === ticker} 
-              onClick={() => setSelectedTicker(ticker)} 
-            />
-          ))}
-        </div>
-      </aside>
-
-      {/* Main Analysis Area */}
-      <main className="panel bb-main" style={{ borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)' }}>
-        <div className="bb-header" style={{ borderBottom: '1px solid var(--border-color)', height: '32px', background: '#050505' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span 
-              className={activeTab === 'sentiment' ? 'value-neutral' : ''} 
-              style={{ cursor: 'pointer', fontWeight: 700 }}
-              onClick={() => setActiveTab('sentiment')}
-            >
-              1) SENTIMENT
-            </span>
-            <span 
-              className={activeTab === 'market' ? 'value-neutral' : ''} 
-              style={{ cursor: 'pointer', fontWeight: 700 }}
-              onClick={() => setActiveTab('market')}
-            >
-              2) MARKET
-            </span>
+      <div className="bb-content">
+        <aside className="panel bb-watchlist">
+          <div className="section-header">TRENDING MARKETS</div>
+          <div style={{ maxHeight: '200px', overflowY: 'auto', borderBottom: '1px solid var(--border-color)' }}>
+            {INDICES.map(ticker => (
+              <WatchlistItem key={ticker} ticker={ticker} selected={selectedTicker === ticker} onClick={() => setSelectedTicker(ticker)} />
+            ))}
           </div>
-          <div style={{ flex: 1, textAlign: 'right', fontSize: '10px', color: 'var(--text-secondary)' }}>
-            {selectedTicker} {marketData?.name} | {marketData?.sector}
+          <div className="section-header">TRENDING STOCKS</div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {TICKERS.map(ticker => (
+              <WatchlistItem key={ticker} ticker={ticker} selected={selectedTicker === ticker} onClick={() => setSelectedTicker(ticker)} />
+            ))}
           </div>
-        </div>
-        
-        <div style={{ flex: 1, position: 'relative', background: '#000' }}>
-           {activeTab === 'sentiment' ? (
-              <SentimentChart 
-                 data={historicalData} 
-                 priceData={marketData?.history || []}
-                 color={latestData?.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} 
-                 layout={{ sidebarWidth: 180, detailsWidth: 320, mainHeight: 55 }}
-               />
-           ) : (
-             <PriceChart 
-                data={marketData?.history || []} 
-                ticker={selectedTicker} 
-                layout={{ sidebarWidth: 180, detailsWidth: 320, mainHeight: 55 }}
-             />
-           )}
+        </aside>
 
-          {/* HUD Overlay */}
-          <div style={{ position: 'absolute', top: '10px', left: '10px', pointerEvents: 'none', background: 'rgba(0,0,0,0.8)', padding: '8px', border: '1px solid #333', zIndex: 10 }}>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-amber)' }}>
-              {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
+        <main className="panel bb-main">
+          <div className="bb-header-sub">
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <span className={activeTab === 'sentiment' ? 'tab-active' : 'tab-inactive'} onClick={() => setActiveTab('sentiment')}>1) SENTIMENT</span>
+              <span className={activeTab === 'market' ? 'tab-active' : 'tab-inactive'} onClick={() => setActiveTab('market')}>2) MARKET</span>
             </div>
-            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-              MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | SENT: {(latestData?.score || 0).toFixed(4)}
+            <div style={{ flex: 1, textAlign: 'right', fontSize: '10px', color: 'var(--text-secondary)' }}>
+              {selectedTicker} {marketData?.name} | {marketData?.sector}
             </div>
           </div>
-        </div>
+          
+          <div className="main-chart-area">
+            <ErrorBoundary>
+              {activeTab === 'sentiment' ? (
+                <SentimentChart data={sentimentSeries} priceData={marketData?.history || []} color={(latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} />
+              ) : (
+               <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
+             )}
+            </ErrorBoundary>
+            <div className="hud-overlay">
+              <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-amber)' }}>
+                {livePrice ? `${getCurrencySymbol(livePrice.currency)}${livePrice.price.toLocaleString()}` : 'LOADING...'}
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                MCAP: {getCurrencySymbol(marketData?.currency)}{formatLargeNumber(marketData?.stats?.['Market Cap'])} | 
+                NEWS SENTIMENT: <span style={{ color: (latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                  {(latestData?.score || 0).toFixed(4)}
+                </span>
+              </div>
+            </div>
+          </div>
 
-        {/* Fundamentals Bald Spot Filler */}
-        <div className="fundamentals-panel" style={{ padding: '16px', borderTop: '1px solid var(--border-color)', background: '#050505', display: 'flex', gap: '20px', overflowY: 'auto' }}>
-          <div style={{ flex: 1 }}>
-            <div className="section-header" style={{ marginBottom: '10px' }}>KEY STATISTICS</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
-              {marketData?.stats && Object.entries(marketData.stats).map(([label, value]) => (
-                <div key={label} style={{ background: '#111', padding: '6px', border: '1px solid #222' }}>
-                  <div style={{ fontSize: '9px', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{label}</div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>
-                    {typeof value === 'number' ? 
-                      (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : 
-                       (label.includes('High') || label.includes('Low') || label.includes('Target') || label.includes('Cap') ? getCurrencySymbol(marketData?.currency) : '') + formatLargeNumber(value)) 
-                      : (value || 'N/A')}
+          <div className="fundamentals-panel">
+            <div style={{ flex: 1.2 }}>
+              <div className="section-header">KEY STATISTICS [{selectedTicker}]</div>
+              <div className="stats-grid">
+                {marketData?.stats && Object.entries(marketData.stats).map(([label, value]) => (
+                  <div key={label} className="stat-card">
+                    <div className="stat-label">{label}</div>
+                    <div className="stat-value">
+                      {typeof value === 'number' ? 
+                        (label.includes('Ratio') || label.includes('PE') || label.includes('Beta') ? value.toFixed(2) : 
+                         (label.includes('High') || label.includes('Low') || label.includes('Target') || label.includes('Cap') ? getCurrencySymbol(marketData?.currency) : '') + formatLargeNumber(value)) 
+                        : (value || 'N/A')}
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ width: '350px', borderLeft: '1px solid #222', paddingLeft: '20px' }}>
+              <div className="section-header">BUSINESS SUMMARY</div>
+              <div className="summary-text">{marketData?.summary}</div>
+              <div className="tag-row">
+                  <div className="tag">SECTOR: {marketData?.sector}</div>
+                  <div className="tag">IND: {marketData?.industry}</div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <aside className="panel bb-details">
+          <div className="section-header">MARKET DEPTH</div>
+          <div className="depth-container">
+            <div className="depth-header"><span>PRICE</span><span>SIZE</span></div>
+            <div className="order-book">
+              {orderBook.asks.map((ask, i) => (
+                <div key={i} className="ask-row"><span>{ask.price.toFixed(2)}</span><span>{ask.size}</span></div>
+              ))}
+              <div className="mid-price">
+                {getCurrencySymbol(livePrice?.currency)}{livePrice?.price?.toFixed(2) || '0.00'}
+              </div>
+              {orderBook.bids.map((bid, i) => (
+                <div key={i} className="bid-row"><span>{bid.price.toFixed(2)}</span><span>{bid.size}</span></div>
               ))}
             </div>
           </div>
-          
-          <div style={{ width: '300px', borderLeft: '1px solid #222', paddingLeft: '20px' }}>
-            <div className="section-header" style={{ marginBottom: '10px' }}>BUSINESS SUMMARY</div>
-            <div style={{ fontSize: '12px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-              {marketData?.summary}
-            </div>
-            <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
-                <div style={{ fontSize: '9px', background: '#111', padding: '4px 8px', border: '1px solid #333' }}>
-                    SECTOR: <span style={{ color: 'white' }}>{marketData?.sector}</span>
+
+          <div className="section-header">NEWS ANALYTICS</div>
+          <div className="news-feed">
+            {newsFeed.length > 0 ? newsFeed.map((n, i) => (
+              <div key={i} className="news-item">
+                <div className="news-meta">
+                  <span className="publisher">{n.publisher?.toUpperCase() || 'FINANCIAL NEWS'}</span>
+                  <span>{n.time}</span>
                 </div>
-                <div style={{ fontSize: '9px', background: '#111', padding: '4px 8px', border: '1px solid #333' }}>
-                    IND: <span style={{ color: 'white' }}>{marketData?.industry}</span>
+                <a href={n.link} target="_blank" rel="noopener noreferrer" className="news-title">{n.title}</a>
+                <div className="sentiment-bar-wrap">
+                  <div className="sentiment-track">
+                    <div className="sentiment-fill" style={{ 
+                      width: `${Math.min(100, Math.abs((n.sentiment?.score || 0) * 100))}%`, 
+                      background: (n.sentiment?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                      marginLeft: (n.sentiment?.score || 0) > 0 ? '0' : 'auto'
+                    }} />
+                  </div>
+                  <span className="sentiment-val" style={{ color: (n.sentiment?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                    {(n.sentiment?.score || 0).toFixed(4)}
+                  </span>
                 </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Side Details / Order Book */}
-      <aside className="panel bb-details">
-        <div className="section-header">MARKET DEPTH</div>
-        <div style={{ padding: '8px', fontSize: '10px', borderBottom: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            <span>PRICE</span>
-            <span>SIZE</span>
-          </div>
-          <div className="order-book" style={{ fontFamily: 'monospace' }}>
-            {orderBook.asks.map((ask, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-red)' }}>
-                <span>{ask.price.toFixed(2)}</span>
-                <span style={{ color: 'var(--text-dim)' }}>{ask.size}</span>
               </div>
-            ))}
-            <div style={{ textAlign: 'center', padding: '4px 0', color: 'white', fontWeight: 700, borderTop: '1px solid #333', borderBottom: '1px solid #333', margin: '4px 0' }}>
-              {getCurrencySymbol(livePrice?.currency)}{livePrice?.price?.toFixed(2) || '0.00'}
-            </div>
-            {orderBook.bids.map((bid, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-green)' }}>
-                <span>{bid.price.toFixed(2)}</span>
-                <span style={{ color: 'var(--text-dim)' }}>{bid.size}</span>
-              </div>
-            ))}
+            )) : <div className="no-news">NO RECENT NEWS DATA</div>}
           </div>
-        </div>
 
-        <div className="section-header" style={{ marginTop: 'auto' }}>CONTROLS</div>
-        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button className="bb-btn" onClick={triggerUpdate} disabled={loading} style={{ color: 'var(--accent-cyan)' }}>
-             <RefreshCw size={10} className={loading ? 'spin' : ''} /> FORCE SCAN {selectedTicker}
-          </button>
-          
-          <div className="layout-controls" style={{ marginTop: '10px', borderTop: '1px solid #222', paddingTop: '10px' }}>
-            <div className="section-header" style={{ color: 'var(--text-dim)', marginBottom: '8px' }}>TERMINAL CONTROLS</div>
-            <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
-                AUTO-SCALING: ENABLED<br/>
-                VISUAL DENSITY: MAX
-            </div>
+          <div className="panel-controls">
+            <button className="bb-btn" onClick={triggerUpdate} disabled={loading}>
+               <RefreshCw size={10} className={loading ? 'spin' : ''} /> RE-SCAN MARKET INTELLIGENCE
+            </button>
           </div>
-        </div>
+        </aside>
+      </div>
 
-        <div className="section-header">REAL-TIME NEWS</div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-          {newsFeed.length > 0 ? newsFeed.map((n, i) => (
-            <div key={i} style={{ marginBottom: '12px', borderBottom: '1px solid #111', paddingBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '2px' }}>
-                <span style={{ color: 'var(--accent-amber)' }}>{n.publisher?.toUpperCase() || 'FINANCIAL NEWS'}</span>
-                <span>{new Date(n.providerPublishTime * 1000).toLocaleTimeString()}</span>
-              </div>
-              <a 
-                href={n.link} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ fontSize: '11px', lineHeight: 1.3, color: 'white', textDecoration: 'none', fontWeight: 500 }}
-              >
-                {n.title}
-              </a>
-            </div>
-          )) : (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '10px' }}>
-              NO RECENT NEWS FOR {selectedTicker}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* Footer / Ticker & Status Bar */}
       <div className="bb-terminal-footer">
         <footer className="bb-footer">
           <div className="live-badge">LIVE</div>
@@ -424,7 +347,6 @@ function App() {
                   </span>
                 </span>
               ))}
-              {/* Duplicate for seamless loop */}
               {[...INDICES, ...TICKERS].map((t, i) => (
                 <span key={`dup-${i}`} className="ticker-item">
                   <span style={{ fontWeight: 800 }}>{t.replace('^', '')}</span>
@@ -435,82 +357,50 @@ function App() {
               ))}
             </div>
           </div>
-          <div className="status-clock">
-            {new Date().toISOString().substring(11, 19)} UTC
-          </div>
+          <div className="status-clock">{new Date().toISOString().substring(11, 19)} UTC</div>
         </footer>
         <div className="status-bar">
           <div className="status-item"><span className="status-dot green"></span> NETWORK: CONNECTED</div>
-          <div className="status-item"><span className="status-dot amber"></span> DB: {db ? 'ONLINE' : 'FALLBACK'}</div>
-          <div className="status-item"><span className="status-dot green"></span> KEYS: 5 ROTATING</div>
-          <div className="status-item" style={{ marginLeft: 'auto' }}>SESSION: GUEST</div>
+          <div className="status-item"><span className="status-dot amber"></span> ANALYTICS: ACTIVE</div>
+          <div className="status-item"><span className="status-dot green"></span> KERNEL: STABLE</div>
+          <div className="status-item" style={{ marginLeft: 'auto' }}>FINVISION TERMINAL v2.0</div>
         </div>
       </div>
 
       <style>{`
-        @keyframes ticker {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .ticker-move {
-          display: flex;
-          white-space: nowrap;
-          animation: ticker 30s linear infinite;
-        }
-        .bb-terminal-footer {
-            border-top: 2px solid var(--border-color);
-            background: #000;
-        }
-        .status-bar {
-            height: 20px;
-            background: #0a0a0a;
-            border-top: 1px solid #222;
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-            gap: 20px;
-            font-size: 9px;
-            color: var(--text-dim);
-            font-weight: 600;
-        }
-        .status-item { display: flex; align-items: center; gap: 5px; }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; }
-        .status-dot.green { background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); }
-        .status-dot.amber { background: var(--accent-amber); box-shadow: 0 0 5px var(--accent-amber); }
-        .live-badge { background: var(--accent-amber); color: #000; padding: 0 10px; font-weight: 900; font-size: 10px; height: 100%; display: flex; align-items: center; }
-        .status-clock { padding: 0 12px; color: var(--accent-amber); font-weight: 700; font-family: monospace; font-size: 11px; }
-
-        .bb-main {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .main-chart-area {
-            height: var(--chart-height, 55%);
-            position: relative;
-            background: #000;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .fundamentals-panel {
-            flex: 1;
-            overflow-y: auto;
-        }
-        .bb-slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 4px;
-            background: #222;
-            outline: none;
-            cursor: pointer;
-        }
-        .bb-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 10px;
-            height: 10px;
-            background: var(--accent-amber);
-            border-radius: 50%;
-            cursor: pointer;
-        }
+        .bb-content { display: flex; flex: 1; overflow: hidden; }
+        .bb-header-sub { border-bottom: 1px solid var(--border-color); height: 32px; background: #050505; display: flex; align-items: center; padding: 0 12px; justify-content: space-between; }
+        .tab-active { color: var(--accent-amber); cursor: pointer; font-weight: 800; border-bottom: 2px solid var(--accent-amber); height: 100%; display: flex; align-items: center; }
+        .tab-inactive { color: var(--text-dim); cursor: pointer; font-weight: 600; height: 100%; display: flex; align-items: center; }
+        .hud-overlay { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.85); padding: 12px; border: 1px solid #333; z-index: 10; border-radius: 2px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .stat-card { background: #0a0a0a; padding: 10px; border: 1px solid #1a1a1a; }
+        .stat-label { fontSize: 9px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+        .stat-value { fontSize: 15px; fontWeight: 800; color: white; }
+        .summary-text { font-size: 13px; line-height: 1.5; color: var(--text-secondary); max-height: 160px; overflow-y: auto; }
+        .tag-row { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .tag { font-size: 9px; background: #111; padding: 4px 8px; border: 1px solid #222; color: var(--text-secondary); }
+        .depth-container { padding: 10px; border-bottom: 1px solid var(--border-color); }
+        .depth-header { display: flex; justify-content: space-between; color: var(--text-dim); font-size: 10px; margin-bottom: 6px; }
+        .mid-price { text-align: center; font-size: 14px; font-weight: 900; color: white; padding: 8px 0; border-top: 1px solid #222; border-bottom: 1px solid #222; margin: 6px 0; }
+        .ask-row, .bid-row { display: flex; justify-content: space-between; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .ask-row { color: var(--accent-red); }
+        .bid-row { color: var(--accent-green); }
+        .news-feed { flex: 1; overflow-y: auto; padding: 10px; }
+        .news-item { margin-bottom: 16px; border-bottom: 1px solid #111; padding-bottom: 10px; }
+        .news-meta { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); margin-bottom: 4px; }
+        .publisher { color: var(--accent-amber); font-weight: 800; }
+        .news-title { font-size: 12px; color: white; text-decoration: none; font-weight: 600; line-height: 1.4; display: block; }
+        .sentiment-bar-wrap { display: flex; alignItems: center; gap: 10px; margin-top: 8px; }
+        .sentiment-track { height: 3px; flex: 1; background: #111; border-radius: 2px; position: relative; }
+        .sentiment-fill { height: 100%; border-radius: 2px; }
+        .sentiment-val { font-size: 10px; font-weight: 900; min-width: 30px; text-align: right; }
+        .panel-controls { padding: 12px; border-top: 1px solid var(--border-color); }
+        .no-news { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 11px; }
+        .main-chart-area { height: 60%; position: relative; border-bottom: 1px solid var(--border-color); }
+        .fundamentals-panel { flex: 1; padding: 20px; display: flex; gap: 24px; background: #020202; overflow: hidden; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
       `}</style>
     </div>
   );
