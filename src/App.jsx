@@ -207,8 +207,7 @@ function App() {
         </div>
       </header>
 
-      <div className="bb-content">
-        <aside className="panel bb-watchlist">
+      <aside className="panel bb-watchlist">
           <div className="section-header">TRENDING MARKETS</div>
           <div style={{ maxHeight: '200px', overflowY: 'auto', borderBottom: '1px solid var(--border-color)' }}>
             {INDICES.map(ticker => (
@@ -239,8 +238,8 @@ function App() {
               {activeTab === 'sentiment' ? (
                 <SentimentChart data={sentimentSeries} priceData={marketData?.history || []} color={(latestData?.score || 0) > 0 ? 'var(--accent-green)' : 'var(--accent-red)'} />
               ) : (
-               <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
-             )}
+                <PriceChart data={marketData?.history || []} ticker={selectedTicker} />
+              )}
             </ErrorBoundary>
             <div className="hud-overlay">
               <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-amber)' }}>
@@ -332,7 +331,6 @@ function App() {
             </button>
           </div>
         </aside>
-      </div>
 
       <footer className="bb-footer">
         <div className="live-badge">LIVE</div>
